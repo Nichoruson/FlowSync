@@ -1,15 +1,15 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import apiRouter from './routes';
 import { errorHandler } from './middlewares/error.middleware';
-
-dotenv.config();
 
 const app = express();
 
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'https://flow-sync-weld.vercel.app/',
+  origin: process.env.CLIENT_URL || 'https://flow-sync-weld.vercel.app',
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   credentials: true
 }));
