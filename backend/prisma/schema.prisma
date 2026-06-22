@@ -1,0 +1,88 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  passwordHash String        @map("password_hash")
+  name         String
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  
+  // Relations
+  ownedBoards  Board[]       @relation("BoardOwner")
+  memberships  BoardMember[]
+  assignedTasks Task[]       @relation("TaskAssignee")
+
+  @@map("users")
+}
+
+model Board {
+  id          String        @id @default(uuid())
+  title       String
+  ownerId     String        @map("owner_id")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  owner       User          @relation("BoardOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members     BoardMember[]
+  columns     Column[]
+
+  @@map("boards")
+}
+
+model BoardMember {
+  boardId   String     @map("board_id")
+  userId    String     @map("user_id")
+  role      String     @default("MEMBER")
+  joinedAt  DateTime   @default(now()) @map("joined_at")
+
+  // Relations
+  board     Board      @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([boardId, userId])
+  @@map("board_members")
+}
+
+model Column {
+  id        String   @id @default(uuid())
+  boardId   String   @map("board_id")
+  title     String
+  position  Float
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+
+  @@index([boardId, position])
+  @@map("columns")
+}
+
+model Task {
+  id          String   @id @default(uuid())
+  columnId    String   @map("column_id")
+  title       String
+  description String?
+  position    Float
+  version     Int      @default(1)
+  assignedTo  String?  @map("assigned_to")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  column      Column   @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  assignee    User?    @relation("TaskAssignee", fields: [assignedTo], references: [id], onDelete: SetNull)
+
+  @@index([columnId, position])
+  @@map("tasks")
+}
