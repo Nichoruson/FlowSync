@@ -1,7 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+import { apiClient, setAccessToken } from '../hooks/useApiClient';
 
 interface User {
   id: string;
@@ -15,63 +13,104 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
+  updateProfile: (name?: string, currentPassword?: string, newPassword?: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+let activeInitPromise: Promise<any> | null = null;
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
+  const [token, setTokenState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Silent refresh on startup
   useEffect(() => {
     const initAuth = async () => {
-      if (!token) {
-        setLoading(false);
-        return;
+      if (!activeInitPromise) {
+        activeInitPromise = apiClient.post('/auth/refresh');
       }
       try {
-        const res = await axios.get(`${API_URL}/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        setUser(res.data.data);
+        const res = await activeInitPromise;
+        const newToken = res.data.data.token;
+        const newUser = res.data.data.user;
+        setAccessToken(newToken);
+        setTokenState(newToken);
+        setUser(newUser);
       } catch (err) {
-        // Token was invalid / expired
-        localStorage.removeItem('token');
-        setToken(null);
+        // Refresh token not present or expired
+        setAccessToken(null);
+        setTokenState(null);
         setUser(null);
       } finally {
+        activeInitPromise = null; // Reset for any future mounts/retries
         setLoading(false);
       }
     };
+
     initAuth();
-  }, [token]);
+
+    // Listen for session expiry event from apiClient
+    const handleSessionExpired = () => {
+      setAccessToken(null);
+      setTokenState(null);
+      setUser(null);
+    };
+
+    window.addEventListener('auth_session_expired', handleSessionExpired);
+    return () => {
+      window.removeEventListener('auth_session_expired', handleSessionExpired);
+    };
+  }, []);
 
   const login = async (email: string, password: string) => {
-    const res = await axios.post(`${API_URL}/auth/login`, { email, password });
+    const res = await apiClient.post('/auth/login', { email, password });
     const { token: newToken, user: newUser } = res.data.data;
-    localStorage.setItem('token', newToken);
-    setToken(newToken);
+    setAccessToken(newToken);
+    setTokenState(newToken);
     setUser(newUser);
   };
 
   const register = async (name: string, email: string, password: string) => {
-    const res = await axios.post(`${API_URL}/auth/register`, { name, email, password });
+    const res = await apiClient.post('/auth/register', { name, email, password });
     const { token: newToken, user: newUser } = res.data.data;
-    localStorage.setItem('token', newToken);
-    setToken(newToken);
+    setAccessToken(newToken);
+    setTokenState(newToken);
     setUser(newUser);
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    setToken(null);
-    setUser(null);
+  const logout = async () => {
+    try {
+      await apiClient.post('/auth/logout');
+    } catch (err) {
+      console.error('Logout request failed', err);
+    } finally {
+      setAccessToken(null);
+      setTokenState(null);
+      setUser(null);
+    }
+  };
+
+  const updateProfile = async (name?: string, currentPassword?: string, newPassword?: string) => {
+    const res = await apiClient.put('/auth/profile', { name, currentPassword, newPassword });
+    const updatedUser = res.data.data;
+    setUser(updatedUser);
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        loading,
+        login,
+        register,
+        logout,
+        updateProfile,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

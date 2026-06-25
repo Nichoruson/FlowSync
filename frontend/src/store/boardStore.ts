@@ -1,7 +1,5 @@
 import { create } from 'zustand';
-import axios from 'axios';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+import { apiClient } from '../hooks/useApiClient';
 
 export interface User {
   id: string;
@@ -16,6 +14,9 @@ export interface Task {
   description: string | null;
   position: number;
   version: number;
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  dueDate: string | null;
+  labels: string[];
   assignedTo: string | null;
   assignee?: User | null;
   createdAt: string;
@@ -42,6 +43,8 @@ export interface BoardMember {
 export interface Board {
   id: string;
   title: string;
+  description: string | null;
+  color: string | null;
   ownerId: string;
   createdAt: string;
   updatedAt: string;
@@ -55,22 +58,55 @@ interface BoardState {
   loading: boolean;
   error: string | null;
   conflictMessage: string | null;
+
+  // Filter States
+  filterText: string;
+  filterPriority: string;
+  filterAssignee: string;
+  filterLabel: string;
+  filterOverdue: boolean;
   
   // Actions
   setConflictMessage: (msg: string | null) => void;
   fetchBoards: () => Promise<void>;
   fetchBoardDetails: (boardId: string) => Promise<void>;
-  createBoard: (title: string) => Promise<void>;
+  createBoard: (title: string, description?: string, color?: string) => Promise<void>;
+  updateBoard: (boardId: string, data: { title?: string; description?: string | null; color?: string }) => Promise<void>;
+  deleteBoard: (boardId: string) => Promise<void>;
+
+  // Filters Actions
+  setFilterText: (text: string) => void;
+  setFilterPriority: (priority: string) => void;
+  setFilterAssignee: (assignee: string) => void;
+  setFilterLabel: (label: string) => void;
+  setFilterOverdue: (overdue: boolean) => void;
+  resetFilters: () => void;
   
   // Columns
   createColumn: (boardId: string, title: string) => Promise<void>;
+  renameColumn: (boardId: string, columnId: string, title: string) => Promise<void>;
   moveColumnLocally: (columnId: string, newPosition: number) => void;
   moveColumnOnServer: (boardId: string, columnId: string, newPosition: number) => Promise<void>;
   deleteColumn: (boardId: string, columnId: string) => Promise<void>;
   
   // Tasks
-  createTask: (boardId: string, columnId: string, title: string, description?: string) => Promise<void>;
-  updateTaskDetails: (boardId: string, taskId: string, data: { title: string; description: string; assignedTo?: string | null }) => Promise<void>;
+  createTask: (boardId: string, data: {
+    columnId: string;
+    title: string;
+    description?: string;
+    priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+    dueDate?: string | null;
+    labels?: string[];
+    assignedTo?: string | null;
+  }) => Promise<void>;
+  updateTaskDetails: (boardId: string, taskId: string, data: {
+    title: string;
+    description: string | null;
+    assignedTo?: string | null;
+    priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+    dueDate?: string | null;
+    labels?: string[];
+  }) => Promise<void>;
   deleteTask: (boardId: string, taskId: string) => Promise<void>;
   moveTaskLocally: (taskId: string, sourceColId: string, destColId: string, position: number) => void;
   moveTaskOnServer: (boardId: string, taskId: string, newColumnId: string, newPosition: number, currentVersion: number) => Promise<void>;
@@ -81,18 +117,14 @@ interface BoardState {
   syncTaskMoved: (taskId: string, newColumnId: string, newPosition: number, version: number) => void;
   syncTaskDeleted: (taskId: string) => void;
   syncColumnCreated: (column: Column) => void;
+  syncColumnUpdated: (column: Column) => void;
   syncColumnMoved: (columnId: string, newPosition: number) => void;
   syncColumnDeleted: (columnId: string) => void;
   syncMemberAdded: (member: BoardMember) => void;
   syncMemberRemoved: (userId: string) => void;
+  syncBoardUpdated: (boardId: string, title: string) => void;
+  syncBoardDeleted: (boardId: string) => void;
 }
-
-const getHeaders = () => {
-  const token = localStorage.getItem('token');
-  return {
-    headers: { Authorization: `Bearer ${token}` }
-  };
-};
 
 export const useBoardStore = create<BoardState>((set, get) => ({
   boards: [],
@@ -101,12 +133,32 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   error: null,
   conflictMessage: null,
 
+  // Filters Default state
+  filterText: '',
+  filterPriority: '',
+  filterAssignee: '',
+  filterLabel: '',
+  filterOverdue: false,
+
   setConflictMessage: (msg) => set({ conflictMessage: msg }),
+
+  setFilterText: (text) => set({ filterText: text }),
+  setFilterPriority: (priority) => set({ filterPriority: priority }),
+  setFilterAssignee: (assignee) => set({ filterAssignee: assignee }),
+  setFilterLabel: (label) => set({ filterLabel: label }),
+  setFilterOverdue: (overdue) => set({ filterOverdue: overdue }),
+  resetFilters: () => set({
+    filterText: '',
+    filterPriority: '',
+    filterAssignee: '',
+    filterLabel: '',
+    filterOverdue: false,
+  }),
 
   fetchBoards: async () => {
     set({ loading: true, error: null });
     try {
-      const res = await axios.get(`${API_URL}/boards`, getHeaders());
+      const res = await apiClient.get('/boards');
       set({ boards: res.data.data, loading: false });
     } catch (err: any) {
       set({ error: err.response?.data?.message || 'Failed to fetch boards', loading: false });
@@ -116,27 +168,60 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   fetchBoardDetails: async (boardId) => {
     set({ loading: true, error: null });
     try {
-      const res = await axios.get(`${API_URL}/boards/${boardId}`, getHeaders());
+      const res = await apiClient.get(`/boards/${boardId}`);
       set({ activeBoard: res.data.data, loading: false });
     } catch (err: any) {
       set({ error: err.response?.data?.message || 'Failed to fetch board details', loading: false });
     }
   },
 
-  createBoard: async (title) => {
+  createBoard: async (title, description = '', color = '#6366f1') => {
     try {
-      const res = await axios.post(`${API_URL}/boards`, { title }, getHeaders());
+      const res = await apiClient.post('/boards', { title, description, color });
       set((state) => ({ boards: [res.data.data, ...state.boards] }));
     } catch (err: any) {
       set({ error: err.response?.data?.message || 'Failed to create board' });
     }
   },
 
+  updateBoard: async (boardId, data) => {
+    try {
+      const res = await apiClient.patch(`/boards/${boardId}`, data);
+      const updatedBoard = res.data.data;
+      set((state) => ({
+        boards: state.boards.map((b) => (b.id === boardId ? { ...b, ...updatedBoard } : b)),
+        activeBoard: state.activeBoard?.id === boardId ? { ...state.activeBoard, ...updatedBoard } : state.activeBoard,
+      }));
+    } catch (err: any) {
+      set({ error: err.response?.data?.message || 'Failed to update board' });
+    }
+  },
+
+  deleteBoard: async (boardId) => {
+    try {
+      await apiClient.delete(`/boards/${boardId}`);
+      set((state) => ({
+        boards: state.boards.filter((b) => b.id !== boardId),
+        activeBoard: state.activeBoard?.id === boardId ? null : state.activeBoard,
+      }));
+    } catch (err: any) {
+      set({ error: err.response?.data?.message || 'Failed to delete board' });
+    }
+  },
+
   createColumn: async (boardId, title) => {
     try {
-      await axios.post(`${API_URL}/columns`, { boardId, title }, getHeaders());
+      await apiClient.post('/columns', { boardId, title });
     } catch (err: any) {
       set({ error: err.response?.data?.message || 'Failed to create column' });
+    }
+  },
+
+  renameColumn: async (boardId, columnId, title) => {
+    try {
+      await apiClient.patch(`/columns/${columnId}`, { title, boardId });
+    } catch (err: any) {
+      set({ error: err.response?.data?.message || 'Failed to rename column' });
     }
   },
 
@@ -154,24 +239,23 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   moveColumnOnServer: async (boardId, columnId, newPosition) => {
     try {
-      await axios.put(`${API_URL}/columns/${columnId}/move`, { newPosition, boardId }, getHeaders());
+      await apiClient.put(`/columns/${columnId}/move`, { newPosition, boardId });
     } catch (err: any) {
-      // Re-fetch in case of failure to align client UI
       get().fetchBoardDetails(boardId);
     }
   },
 
   deleteColumn: async (boardId, columnId) => {
     try {
-      await axios.delete(`${API_URL}/columns/${columnId}?boardId=${boardId}`, getHeaders());
+      await apiClient.delete(`/columns/${columnId}?boardId=${boardId}`);
     } catch (err: any) {
       set({ error: err.response?.data?.message || 'Failed to delete column' });
     }
   },
 
-  createTask: async (boardId, columnId, title, description = '') => {
+  createTask: async (boardId, data) => {
     try {
-      await axios.post(`${API_URL}/tasks`, { columnId, title, description, boardId }, getHeaders());
+      await apiClient.post('/tasks', { ...data, boardId });
     } catch (err: any) {
       set({ error: err.response?.data?.message || 'Failed to create task' });
     }
@@ -179,7 +263,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   updateTaskDetails: async (boardId, taskId, data) => {
     try {
-      await axios.put(`${API_URL}/tasks/${taskId}`, { ...data, boardId }, getHeaders());
+      await apiClient.put(`/tasks/${taskId}`, { ...data, boardId });
     } catch (err: any) {
       set({ error: err.response?.data?.message || 'Failed to update task' });
     }
@@ -187,7 +271,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   deleteTask: async (boardId, taskId) => {
     try {
-      await axios.delete(`${API_URL}/tasks/${taskId}?boardId=${boardId}`, getHeaders());
+      await apiClient.delete(`/tasks/${taskId}?boardId=${boardId}`);
     } catch (err: any) {
       set({ error: err.response?.data?.message || 'Failed to delete task' });
     }
@@ -238,18 +322,15 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   moveTaskOnServer: async (boardId, taskId, newColumnId, newPosition, currentVersion) => {
     try {
-      await axios.put(
-        `${API_URL}/tasks/${taskId}/move`,
-        { newColumnId, newPosition, currentVersion, boardId },
-        getHeaders()
+      await apiClient.put(
+        `/tasks/${taskId}/move`,
+        { newColumnId, newPosition, currentVersion, boardId }
       );
     } catch (err: any) {
       if (err.response?.status === 409) {
-        // Rollback triggers: pull fresh layout from DB & display warning
         set({ conflictMessage: 'Collision! This task was moved by someone else. Synchronizing board...' });
         get().fetchBoardDetails(boardId);
       } else {
-        // General error fallback
         set({ error: err.response?.data?.message || 'Network error: Position update reverted.' });
         get().fetchBoardDetails(boardId);
       }
@@ -266,7 +347,6 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
     const columns = activeBoard.columns.map((col) => {
       if (col.id === columnId) {
-        // Prevent duplicate append in case we created it locally
         if (col.tasks.some((t) => t.id === task.id)) return col;
         return {
           ...col,
@@ -290,6 +370,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           tasks: col.tasks.map((t) => (t.id === task.id ? task : t)),
         };
       }
+      // If task was moved to a different column, we handles in syncTaskMoved
       return col;
     });
 
@@ -302,7 +383,6 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
     let targetTask: Task | null = null;
     
-    // Extract task from its current column
     const cleanedColumns = activeBoard.columns.map((col) => {
       const found = col.tasks.find((t) => t.id === taskId);
       if (found) {
@@ -314,7 +394,6 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
     if (!targetTask) return;
 
-    // Put task into new column in sorted order
     const reconciledColumns = cleanedColumns.map((col) => {
       if (col.id === newColumnId) {
         return {
@@ -352,6 +431,17 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     set({ activeBoard: { ...activeBoard, columns } });
   },
 
+  syncColumnUpdated: (column) => {
+    const { activeBoard } = get();
+    if (!activeBoard) return;
+
+    const columns = activeBoard.columns.map((col) =>
+      col.id === column.id ? { ...col, ...column, tasks: col.tasks } : col
+    );
+
+    set({ activeBoard: { ...activeBoard, columns } });
+  },
+
   syncColumnMoved: (columnId, newPosition) => {
     const { activeBoard } = get();
     if (!activeBoard) return;
@@ -374,13 +464,27 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   syncMemberAdded: (member) => {
     const { activeBoard } = get();
     if (!activeBoard) return;
-    if (activeBoard.members.some(m => m.userId === member.userId)) return;
+    if (activeBoard.members.some((m) => m.userId === member.userId)) return;
     set({ activeBoard: { ...activeBoard, members: [...activeBoard.members, member] } });
   },
 
   syncMemberRemoved: (userId) => {
     const { activeBoard } = get();
     if (!activeBoard) return;
-    set({ activeBoard: { ...activeBoard, members: activeBoard.members.filter(m => m.userId !== userId) } });
+    set({ activeBoard: { ...activeBoard, members: activeBoard.members.filter((m) => m.userId !== userId) } });
+  },
+
+  syncBoardUpdated: (boardId, title) => {
+    const { activeBoard, boards } = get();
+    const updatedBoards = boards.map((b) => (b.id === boardId ? { ...b, title } : b));
+    const updatedActive = activeBoard?.id === boardId ? { ...activeBoard, title } : activeBoard;
+    set({ boards: updatedBoards, activeBoard: updatedActive });
+  },
+
+  syncBoardDeleted: (boardId) => {
+    const { activeBoard, boards } = get();
+    const updatedBoards = boards.filter((b) => b.id !== boardId);
+    const updatedActive = activeBoard?.id === boardId ? null : activeBoard;
+    set({ boards: updatedBoards, activeBoard: updatedActive });
   },
 }));

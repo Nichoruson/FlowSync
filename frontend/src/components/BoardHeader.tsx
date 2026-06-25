@@ -4,8 +4,8 @@ import { useBoardStore } from '../store/boardStore';
 import { useSocket } from '../context/SocketContext';
 import { InviteModal } from './InviteModal';
 import {
-  LogOut, Plus, UserPlus, Activity, FolderKanban,
-  Wifi, WifiOff
+  Plus, UserPlus, Activity, FolderKanban,
+  Wifi, WifiOff, Trash2, Edit2
 } from 'lucide-react';
 
 interface BoardHeaderProps {
@@ -24,13 +24,46 @@ const AVATAR_COLORS = [
 const avatarColor = (name: string) => AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
 
 export const BoardHeader: React.FC<BoardHeaderProps> = ({ boardId }) => {
-  const { logout, user } = useAuth();
-  const { activeBoard, createColumn } = useBoardStore();
+  const { user } = useAuth();
+  const { activeBoard, createColumn, updateBoard, deleteBoard } = useBoardStore();
   const { onlineUsers, socket } = useSocket();
 
   const [newColTitle, setNewColTitle] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
+
+  // Board rename state
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editTitle, setEditTitle] = useState(activeBoard?.title || '');
+
+  const isConnected = socket?.connected;
+  const isOwner = activeBoard?.ownerId === user?.id;
+
+  const handleRenameSubmit = async () => {
+    if (!editTitle.trim() || editTitle.trim() === activeBoard?.title) {
+      setIsEditingTitle(false);
+      setEditTitle(activeBoard?.title || '');
+      return;
+    }
+    await updateBoard(boardId, { title: editTitle.trim() });
+    setIsEditingTitle(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleRenameSubmit();
+    } else if (e.key === 'Escape') {
+      setIsEditingTitle(false);
+      setEditTitle(activeBoard?.title || '');
+    }
+  };
+
+  const handleDeleteBoard = async () => {
+    if (window.confirm('WARNING: Are you sure you want to permanently delete this board? This action cannot be undone.')) {
+      await deleteBoard(boardId);
+      window.location.hash = '#/';
+    }
+  };
 
   const handleAddColumn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,8 +72,6 @@ export const BoardHeader: React.FC<BoardHeaderProps> = ({ boardId }) => {
     setNewColTitle('');
     setIsAdding(false);
   };
-
-  const isConnected = socket?.connected;
 
   // Deduplicate online users by userId
   const uniqueOnline = onlineUsers.filter(
@@ -54,16 +85,56 @@ export const BoardHeader: React.FC<BoardHeaderProps> = ({ boardId }) => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', minWidth: 0 }}>
           <div style={{
             width: '40px', height: '40px', borderRadius: '10px', flexShrink: 0,
-            background: 'linear-gradient(135deg, var(--color-primary), var(--color-accent))',
+            background: `linear-gradient(135deg, ${activeBoard?.color || 'var(--color-primary)'}, var(--color-accent))`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 4px 16px rgba(99,102,241,0.35)'
+            boxShadow: `0 4px 16px ${activeBoard?.color || 'var(--color-primary)'}55`
           }}>
             <FolderKanban size={20} color="white" />
           </div>
           <div style={{ minWidth: 0 }}>
-            <h1 style={{ fontSize: '1.15rem', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {activeBoard?.title}
-            </h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              {isEditingTitle ? (
+                <input
+                  type="text"
+                  className="board-title-edit-input"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  onBlur={handleRenameSubmit}
+                  onKeyDown={handleKeyDown}
+                  autoFocus
+                />
+              ) : (
+                <h1
+                  style={{
+                    fontSize: '1.25rem',
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    cursor: isOwner ? 'pointer' : 'default',
+                  }}
+                  onDoubleClick={() => isOwner && setIsEditingTitle(true)}
+                  title={isOwner ? "Double click to rename board" : undefined}
+                >
+                  {activeBoard?.title}
+                </h1>
+              )}
+
+              {isOwner && !isEditingTitle && (
+                <button
+                  className="btn-icon"
+                  onClick={() => {
+                    setEditTitle(activeBoard?.title || '');
+                    setIsEditingTitle(true);
+                  }}
+                  title="Rename Board"
+                  style={{ padding: '2px' }}
+                >
+                  <Edit2 size={12} />
+                </button>
+              )}
+            </div>
+
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.1rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                 {isConnected ? (
@@ -129,9 +200,10 @@ export const BoardHeader: React.FC<BoardHeaderProps> = ({ boardId }) => {
             className="btn-secondary"
             style={{ padding: '0.45rem 0.875rem', fontSize: '0.8rem' }}
             onClick={() => setShowInvite(true)}
+            title={`Manage members (${activeBoard?.members.length ?? 0} total)`}
           >
             <UserPlus size={15} />
-            <span>Invite</span>
+            <span>Invite ({activeBoard?.members.length ?? 0})</span>
           </button>
 
           {/* Add column */}
@@ -156,6 +228,20 @@ export const BoardHeader: React.FC<BoardHeaderProps> = ({ boardId }) => {
             </button>
           )}
 
+          {isOwner && (
+            <>
+              <div className="divider" />
+              <button
+                className="btn-icon danger"
+                onClick={handleDeleteBoard}
+                title="Delete Board"
+                style={{ padding: '0.45rem' }}
+              >
+                <Trash2 size={16} />
+              </button>
+            </>
+          )}
+
           <div className="divider" />
 
           {/* Member avatar (self) */}
@@ -166,16 +252,6 @@ export const BoardHeader: React.FC<BoardHeaderProps> = ({ boardId }) => {
           >
             {user?.name.charAt(0).toUpperCase()}
           </div>
-
-          {/* Logout */}
-          <button
-            className="btn-icon danger"
-            onClick={logout}
-            title="Sign Out"
-            style={{ color: 'var(--text-dark)' }}
-          >
-            <LogOut size={16} />
-          </button>
         </div>
       </div>
 

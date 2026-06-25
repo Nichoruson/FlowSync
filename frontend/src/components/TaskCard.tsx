@@ -4,7 +4,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { useBoardStore } from '../store/boardStore';
 import type { Task } from '../store/boardStore';
 import { useSocket } from '../context/SocketContext';
-import { Edit2, Trash2, Check, X, ShieldAlert, FileText } from 'lucide-react';
+import { Edit2, Trash2, Check, X, ShieldAlert, FileText, Calendar, AlertCircle } from 'lucide-react';
+import TaskDetailModal from './TaskDetailModal';
 
 interface TaskCardProps {
   task: Task;
@@ -26,6 +27,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, boardId, taskIndex = 0
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(task.title);
   const [editDesc, setEditDesc] = useState(task.description || '');
+  const [showDetailModal, setShowDetailModal] = useState(false);
 
   const lockInfo = lockedTasks[task.id];
   const isLocked = !!lockInfo;
@@ -58,120 +60,168 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, boardId, taskIndex = 0
     if (!editTitle.trim()) return;
     await updateTaskDetails(boardId, task.id, {
       title: editTitle.trim(),
-      description: editDesc.trim(),
+      description: editDesc.trim() || null,
     });
     setIsEditing(false);
   };
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm('Delete this task?')) await deleteTask(boardId, task.id);
+    if (window.confirm('Delete this task?')) await deleteTask(boardId, task.id);
   };
 
   const avatarColor = task.assignee
     ? AVATAR_COLORS[task.assignee.name.charCodeAt(0) % AVATAR_COLORS.length]
     : '';
 
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`task-card ${isDragging ? 'is-dragging' : ''} ${isLocked ? 'locked' : ''}`}
-      {...attributes}
-      {...listeners}
-    >
-      {/* Collaboration lock overlay */}
-      {isLocked && (
-        <div className="task-lock-overlay">
-          <ShieldAlert size={14} />
-          <span>{lockInfo.userName} is moving this</span>
-        </div>
-      )}
+  const isOverdue = task.dueDate ? new Date(task.dueDate) < new Date() : false;
+  const formattedDueDate = task.dueDate
+    ? new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    : '';
 
-      {isEditing ? (
-        <form onSubmit={handleUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }} onClick={e => e.stopPropagation()}>
-          <input
-            type="text"
-            className="input-field"
-            style={{ padding: '0.35rem 0.6rem', fontSize: '0.85rem' }}
-            value={editTitle}
-            onChange={e => setEditTitle(e.target.value)}
-            required
-            autoFocus
-          />
-          <textarea
-            className="input-field"
-            style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem', minHeight: '56px', resize: 'vertical' }}
-            placeholder="Description..."
-            value={editDesc}
-            onChange={e => setEditDesc(e.target.value)}
-          />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.35rem' }}>
-            <button type="submit" className="btn-primary" style={{ padding: '0.25rem 0.625rem', fontSize: '0.75rem' }}>
-              <Check size={12} /> Save
-            </button>
-            <button
-              type="button"
-              className="btn-secondary"
-              style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
-              onClick={() => { setEditTitle(task.title); setEditDesc(task.description || ''); setIsEditing(false); }}
-            >
-              <X size={12} />
-            </button>
+  return (
+    <>
+      <div
+        ref={setNodeRef}
+        style={style}
+        className={`task-card ${isDragging ? 'is-dragging' : ''} ${isLocked ? 'locked' : ''}`}
+        onDoubleClick={() => !isEditing && !isLocked && setShowDetailModal(true)}
+        {...attributes}
+        {...listeners}
+      >
+        {/* Collaboration lock overlay */}
+        {isLocked && (
+          <div className="task-lock-overlay">
+            <ShieldAlert size={14} />
+            <span>{lockInfo.userName} is moving this</span>
           </div>
-        </form>
-      ) : (
-        <>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.4rem' }}>
-            <h4 className="task-title" style={{ flex: 1 }}>{task.title}</h4>
-            <div style={{ display: 'flex', gap: '0.1rem', opacity: 0, transition: 'opacity 0.15s ease' }}
-              onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
-              onMouseLeave={e => (e.currentTarget.style.opacity = '0')}
-            >
-              <button
-                className="btn-icon"
-                onClick={e => { e.stopPropagation(); setIsEditing(true); }}
-                title="Edit"
-              >
-                <Edit2 size={12} />
+        )}
+
+        {isEditing ? (
+          <form onSubmit={handleUpdate} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }} onClick={e => e.stopPropagation()}>
+            <input
+              type="text"
+              className="input-field"
+              style={{ padding: '0.35rem 0.6rem', fontSize: '0.85rem' }}
+              value={editTitle}
+              onChange={e => setEditTitle(e.target.value)}
+              required
+              autoFocus
+            />
+            <textarea
+              className="input-field"
+              style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem', minHeight: '56px', resize: 'vertical' }}
+              placeholder="Description..."
+              value={editDesc}
+              onChange={e => setEditDesc(e.target.value)}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.35rem' }}>
+              <button type="submit" className="btn-primary" style={{ padding: '0.25rem 0.625rem', fontSize: '0.75rem' }}>
+                <Check size={12} /> Save
               </button>
               <button
-                className="btn-icon danger"
-                onClick={handleDelete}
-                title="Delete"
+                type="button"
+                className="btn-secondary"
+                style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                onClick={() => { setEditTitle(task.title); setEditDesc(task.description || ''); setIsEditing(false); }}
               >
-                <Trash2 size={12} />
+                <X size={12} />
               </button>
             </div>
-          </div>
-
-          {task.description && (
-            <p className="task-desc">{task.description}</p>
-          )}
-
-          <div className="task-footer">
-            <span className="version-badge">
-              <FileText size={9} />
-              v{task.version}
-            </span>
-
-            {task.assignee && (
-              <div
-                title={`Assigned: ${task.assignee.name}`}
-                style={{
-                  width: '22px', height: '22px', borderRadius: '50%',
-                  background: avatarColor, color: 'white',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '0.6rem', fontWeight: 700,
-                  border: '1.5px solid var(--bg-surface)',
-                }}
-              >
-                {task.assignee.name.charAt(0).toUpperCase()}
+          </form>
+        ) : (
+          <>
+            {/* Labels chips */}
+            {task.labels && task.labels.length > 0 && (
+              <div className="task-labels-container">
+                {task.labels.map((label) => (
+                  <span key={label} className="task-label-badge">
+                    {label}
+                  </span>
+                ))}
               </div>
             )}
-          </div>
-        </>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.4rem' }}>
+              <h4 className="task-title" style={{ flex: 1 }}>{task.title}</h4>
+              <div className="task-actions-btn-group">
+                <button
+                  className="btn-icon"
+                  onClick={e => { e.stopPropagation(); setIsEditing(true); }}
+                  title="Edit title/desc inline"
+                >
+                  <Edit2 size={12} />
+                </button>
+                <button
+                  className="btn-icon danger"
+                  onClick={handleDelete}
+                  title="Delete"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            </div>
+
+            {/* Details section */}
+            <div className="task-details-preview" style={{ marginTop: '0.5rem', marginBottom: '0.625rem' }}>
+              <span style={{ fontSize: '0.68rem', color: 'var(--text-dark)', fontWeight: 700, display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.15rem' }}>Details</span>
+              <p className="task-desc" style={{ margin: 0, fontStyle: task.description ? 'normal' : 'italic' }}>
+                {task.description || 'No description provided.'}
+              </p>
+            </div>
+
+            {/* Middle Section: Priority & Due Date */}
+            <div className="task-card-meta-row">
+              {task.priority && (
+                <span className={`priority-badge ${task.priority.toLowerCase()}`}>
+                  <AlertCircle size={10} />
+                  {task.priority}
+                </span>
+              )}
+
+              {task.dueDate && (
+                <span className={`due-date-badge ${isOverdue ? 'overdue' : ''}`}>
+                  <Calendar size={10} />
+                  {formattedDueDate}
+                </span>
+              )}
+            </div>
+
+            <div className="task-footer">
+              <span className="version-badge">
+                <FileText size={9} />
+                v{task.version}
+              </span>
+
+              {task.assignee ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }} title={`Assigned to ${task.assignee.name}`}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{task.assignee.name}</span>
+                  <div
+                    style={{
+                      width: '20px', height: '20px', borderRadius: '50%',
+                      background: avatarColor, color: 'white',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '0.55rem', fontWeight: 700,
+                      border: '1.5px solid var(--bg-surface)',
+                    }}
+                  >
+                    {task.assignee.name.charAt(0).toUpperCase()}
+                  </div>
+                </div>
+              ) : (
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-dark)', fontStyle: 'italic' }}>Unassigned</span>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {showDetailModal && (
+        <TaskDetailModal
+          task={task}
+          onClose={() => setShowDetailModal(false)}
+        />
       )}
-    </div>
+    </>
   );
 };

@@ -5,24 +5,37 @@ import {
   moveTask,
   deleteTask,
   createColumn,
+  updateColumn,
   moveColumn,
   deleteColumn,
 } from '../controllers/task.controller';
-import { authenticateJWT } from '../middlewares/auth.middleware';
+import { authenticateJWT, requireBoardMember } from '../middlewares/auth.middleware';
+import { validate } from '../middlewares/validate.middleware';
+import {
+  createTaskSchema,
+  updateTaskSchema,
+  moveTaskSchema,
+  deleteTaskSchema,
+  createColumnSchema,
+  updateColumnSchema,
+  moveColumnSchema,
+  deleteColumnSchema,
+} from '../schemas/task.schema';
 
 const router = Router();
 
 router.use(authenticateJWT);
 
 // Tasks
-router.post('/tasks', createTask);
-router.put('/tasks/:id', updateTask);
-router.put('/tasks/:id/move', moveTask);
-router.delete('/tasks/:id', deleteTask);
+router.post('/tasks', validate(createTaskSchema), requireBoardMember(), createTask);
+router.put('/tasks/:id', validate(updateTaskSchema), requireBoardMember(), updateTask);
+router.put('/tasks/:id/move', validate(moveTaskSchema), requireBoardMember(), moveTask);
+router.delete('/tasks/:id', validate(deleteTaskSchema), requireBoardMember(), deleteTask);
 
 // Columns
-router.post('/columns', createColumn);
-router.put('/columns/:id/move', moveColumn);
-router.delete('/columns/:id', deleteColumn);
+router.post('/columns', validate(createColumnSchema), requireBoardMember(), createColumn);
+router.patch('/columns/:id', validate(updateColumnSchema), requireBoardMember(), updateColumn);
+router.put('/columns/:id/move', validate(moveColumnSchema), requireBoardMember(), moveColumn);
+router.delete('/columns/:id', validate(deleteColumnSchema), requireBoardMember(), deleteColumn);
 
 export default router;

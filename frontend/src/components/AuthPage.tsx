@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { ParticleBackground } from './ParticleBackground';
-import { Mail, Lock, User, Zap, Loader2, ArrowRight } from 'lucide-react';
+import { Mail, Lock, User, Zap, Loader2, ArrowRight, ShieldAlert } from 'lucide-react';
 
 export const AuthPage: React.FC = () => {
   const { login, register } = useAuth();
@@ -10,11 +10,67 @@ export const AuthPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  
+  // Field validation errors
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [nameError, setNameError] = useState('');
+
   const [submitting, setSubmitting] = useState(false);
+
+  const getPasswordStrength = (pwd: string) => {
+    if (!pwd) return { label: '', color: '', width: '0%' };
+    if (pwd.length < 8) return { label: 'Weak (min 8 characters)', color: '#ef4444', width: '33%' };
+    const hasDigit = /[0-9]/.test(pwd);
+    if (hasDigit) return { label: 'Strong', color: '#10b981', width: '100%' };
+    return { label: 'Medium (add a number)', color: '#f59e0b', width: '66%' };
+  };
+
+  const validateFields = (): boolean => {
+    let isValid = true;
+    setEmailError('');
+    setPasswordError('');
+    setNameError('');
+
+    // Email
+    if (!email) {
+      setEmailError('Email is required');
+      isValid = false;
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailError('Please enter a valid email address');
+      isValid = false;
+    }
+
+    // Password
+    if (!password) {
+      setPasswordError('Password is required');
+      isValid = false;
+    } else if (!isLogin && password.length < 8) {
+      setPasswordError('Password must be at least 8 characters');
+      isValid = false;
+    } else if (!isLogin && !/[0-9]/.test(password)) {
+      setPasswordError('Password must contain at least one number');
+      isValid = false;
+    }
+
+    // Name
+    if (!isLogin && !name.trim()) {
+      setNameError('Name is required');
+      isValid = false;
+    } else if (!isLogin && name.trim().length < 2) {
+      setNameError('Name must be at least 2 characters');
+      isValid = false;
+    }
+
+    return isValid;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (!validateFields()) return;
+
     setSubmitting(true);
     try {
       if (isLogin) {
@@ -32,10 +88,15 @@ export const AuthPage: React.FC = () => {
   const switchMode = () => {
     setIsLogin(!isLogin);
     setError(null);
+    setEmailError('');
+    setPasswordError('');
+    setNameError('');
     setEmail('');
     setPassword('');
     setName('');
   };
+
+  const strength = getPasswordStrength(password);
 
   return (
     <div style={{ position: 'relative', minHeight: '100vh' }}>
@@ -98,7 +159,7 @@ export const AuthPage: React.FC = () => {
             })}
           </div>
 
-          {/* Error */}
+          {/* General API error */}
           {error && (
             <div style={{
               padding: '0.7rem 0.9rem',
@@ -108,8 +169,12 @@ export const AuthPage: React.FC = () => {
               color: '#fca5a5',
               fontSize: '0.83rem',
               marginBottom: '1rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
             }}>
-              {error}
+              <ShieldAlert size={16} />
+              <span>{error}</span>
             </div>
           )}
 
@@ -123,14 +188,16 @@ export const AuthPage: React.FC = () => {
                   <input
                     type="text"
                     placeholder="John Doe"
-                    className="input-field"
+                    className={`input-field ${nameError ? 'error' : ''}`}
                     style={{ paddingLeft: '2.5rem' }}
                     value={name}
-                    onChange={e => setName(e.target.value)}
-                    required
-                    autoFocus
+                    onChange={e => {
+                      setName(e.target.value);
+                      if (e.target.value.trim().length >= 2) setNameError('');
+                    }}
                   />
                 </div>
+                {nameError && <div className="inline-error-msg">{nameError}</div>}
               </div>
             )}
 
@@ -141,14 +208,16 @@ export const AuthPage: React.FC = () => {
                 <input
                   type="email"
                   placeholder="you@example.com"
-                  className="input-field"
+                  className={`input-field ${emailError ? 'error' : ''}`}
                   style={{ paddingLeft: '2.5rem' }}
                   value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  required
-                  autoFocus={isLogin}
+                  onChange={e => {
+                    setEmail(e.target.value);
+                    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.target.value)) setEmailError('');
+                  }}
                 />
               </div>
+              {emailError && <div className="inline-error-msg">{emailError}</div>}
             </div>
 
             <div>
@@ -158,15 +227,43 @@ export const AuthPage: React.FC = () => {
                 <input
                   type="password"
                   placeholder="••••••••"
-                  className="input-field"
+                  className={`input-field ${passwordError ? 'error' : ''}`}
                   style={{ paddingLeft: '2.5rem' }}
                   value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
-                  minLength={6}
+                  onChange={e => {
+                    setPassword(e.target.value);
+                    if (isLogin && e.target.value.length > 0) setPasswordError('');
+                    if (!isLogin && e.target.value.length >= 8 && /[0-9]/.test(e.target.value)) setPasswordError('');
+                  }}
                 />
               </div>
+              {passwordError && <div className="inline-error-msg">{passwordError}</div>}
             </div>
+
+            {/* Password strength bar */}
+            {!isLogin && password && (
+              <div className="strength-container" style={{ marginTop: '0.2rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', marginBottom: '4px', color: 'var(--text-muted)' }}>
+                  <span>Password Strength:</span>
+                  <span style={{ color: strength.color, fontWeight: 600 }}>{strength.label}</span>
+                </div>
+                <div style={{ height: '5px', width: '100%', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: strength.width, backgroundColor: strength.color, transition: 'all 0.3s ease' }}></div>
+                </div>
+              </div>
+            )}
+
+            {/* Forgot password link placeholder */}
+            {isLogin && (
+              <div style={{ textAlign: 'right', marginTop: '-0.2rem' }}>
+                <span
+                  style={{ fontSize: '0.75rem', color: 'var(--text-dark)', cursor: 'not-allowed', textDecoration: 'none', opacity: 0.5 }}
+                  title="Password reset service not configured"
+                >
+                  Forgot password? (Unavailable)
+                </span>
+              </div>
+            )}
 
             <button
               type="submit"
@@ -203,3 +300,5 @@ export const AuthPage: React.FC = () => {
     </div>
   );
 };
+
+export default AuthPage;

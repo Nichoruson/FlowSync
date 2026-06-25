@@ -2,7 +2,7 @@ import React from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import { AuthPage } from './components/AuthPage';
-import { BoardPage } from './components/BoardPage';
+import { Router } from './components/Router';
 
 const AppContent: React.FC = () => {
   const { token, loading } = useAuth();
@@ -26,7 +26,7 @@ const AppContent: React.FC = () => {
 
   return (
     <SocketProvider>
-      <BoardPage />
+      <Router />
     </SocketProvider>
   );
 };

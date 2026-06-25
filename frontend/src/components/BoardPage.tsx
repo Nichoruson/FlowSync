@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   DndContext,
   PointerSensor,
@@ -14,9 +14,10 @@ import { BoardHeader } from './BoardHeader';
 import { ColumnContainer } from './ColumnContainer';
 import { ParticleBackground } from './ParticleBackground';
 import { SkeletonLoader } from './SkeletonLoader';
+import Sidebar from './Sidebar';
 import {
-  AlertCircle, Plus, LayoutGrid, X, CheckCircle, Info,
-  FolderKanban, Zap
+  AlertCircle, X, CheckCircle, Info, FolderKanban,
+  Search, Filter, Calendar, AlertTriangle
 } from 'lucide-react';
 
 // Toast Notification Component
@@ -36,7 +37,7 @@ const ToastDisplay: React.FC = () => {
             <span style={{ flex: 1 }}>{t.message}</span>
             <button
               onClick={() => dismissToast(t.id)}
-              style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', opacity: 0.7, padding: '0.1rem' }}
+              className="toast-close-btn"
             >
               <X size={14} />
             </button>
@@ -47,53 +48,72 @@ const ToastDisplay: React.FC = () => {
   );
 };
 
-export const BoardPage: React.FC = () => {
-  const {
-    activeBoard, boards, loading,
-    fetchBoards, fetchBoardDetails, createBoard,
-    moveTaskLocally, moveTaskOnServer,
-    conflictMessage, setConflictMessage,
-  } = useBoardStore();
-  const { joinBoard, leaveBoard } = useSocket();
+interface BoardPageProps {
+  boardId: string;
+}
 
-  const [selectedBoardId, setSelectedBoardId] = useState<string>('');
-  const [newBoardTitle, setNewBoardTitle] = useState('');
-  const [showCreateModal, setShowCreateModal] = useState(false);
+export const BoardPage: React.FC<BoardPageProps> = ({ boardId }) => {
+  const {
+    activeBoard,
+    loading,
+    fetchBoards,
+    fetchBoardDetails,
+    moveTaskLocally,
+    moveTaskOnServer,
+    conflictMessage,
+    setConflictMessage,
+    // Filters state
+    filterText,
+    filterPriority,
+    filterAssignee,
+    filterLabel,
+    filterOverdue,
+    // Filters actions
+    setFilterText,
+    setFilterPriority,
+    setFilterAssignee,
+    setFilterLabel,
+    setFilterOverdue,
+    resetFilters,
+  } = useBoardStore();
+
+  const { joinBoard, leaveBoard } = useSocket();
   const prevBoardId = useRef<string>('');
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
   );
 
-  useEffect(() => { fetchBoards(); }, []);
+  useEffect(() => {
+    fetchBoards();
+  }, [fetchBoards]);
 
   useEffect(() => {
-    if (boards.length > 0 && !selectedBoardId) {
-      setSelectedBoardId(boards[0].id);
-    }
-  }, [boards]);
+    if (!boardId) return;
 
-  useEffect(() => {
-    if (!selectedBoardId) return;
-    if (prevBoardId.current && prevBoardId.current !== selectedBoardId) {
+    // Leave previous room if any
+    if (prevBoardId.current && prevBoardId.current !== boardId) {
       leaveBoard(prevBoardId.current);
     }
-    fetchBoardDetails(selectedBoardId).then(() => {
-      joinBoard(selectedBoardId);
+
+    // Fetch and join new room
+    fetchBoardDetails(boardId).then(() => {
+      joinBoard(boardId);
     });
-    prevBoardId.current = selectedBoardId;
+
+    prevBoardId.current = boardId;
 
     return () => {
-      if (selectedBoardId) leaveBoard(selectedBoardId);
+      if (boardId) leaveBoard(boardId);
     };
-  }, [selectedBoardId]);
+  }, [boardId, fetchBoardDetails, joinBoard, leaveBoard]);
 
   useEffect(() => {
     if (conflictMessage) {
       const t = setTimeout(() => setConflictMessage(null), 5000);
       return () => clearTimeout(t);
     }
-  }, [conflictMessage]);
+  }, [conflictMessage, setConflictMessage]);
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
@@ -162,73 +182,29 @@ export const BoardPage: React.FC = () => {
     await moveTaskOnServer(activeBoard.id, taskId, destColId, newPosition, currentVersion);
   };
 
-  const handleCreateBoard = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newBoardTitle.trim()) return;
-    await createBoard(newBoardTitle.trim());
-    setNewBoardTitle('');
-    setShowCreateModal(false);
-    await fetchBoards();
-  };
+  // Compute all unique labels on this board for filters
+  const uniqueLabels = activeBoard
+    ? Array.from(
+        new Set(
+          activeBoard.columns.flatMap(col =>
+            col.tasks.flatMap(t => t.labels || [])
+          )
+        )
+      )
+    : [];
+
+  const hasActiveFilters =
+    filterText || filterPriority || filterAssignee || filterLabel || filterOverdue;
 
   return (
-    <div className="app-root">
-      <ParticleBackground />
+    <div className="board-page-layout">
+      {/* Sidebar Panel */}
+      <Sidebar activeBoardId={boardId} />
 
-      <div className="app-container">
-        {/* Workspace top bar */}
-        <div className="workspace-bar">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            {/* Logo */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{
-                width: '28px', height: '28px', borderRadius: '7px',
-                background: 'linear-gradient(135deg, var(--color-primary), var(--color-accent))',
-                display: 'flex', alignItems: 'center', justifyContent: 'center'
-              }}>
-                <Zap size={16} color="white" />
-              </div>
-              <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: '1rem', letterSpacing: '-0.02em' }}>
-                FlowSync
-              </span>
-            </div>
+      {/* Main Board Content */}
+      <div className="board-main-content">
+        <ParticleBackground />
 
-            <div className="divider" />
-
-            {/* Board selector */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <LayoutGrid size={14} color="var(--text-dark)" />
-              <span style={{ fontSize: '0.78rem', color: 'var(--text-dark)' }}>Board:</span>
-              <select
-                className="input-field workspace-select"
-                value={selectedBoardId}
-                onChange={e => setSelectedBoardId(e.target.value)}
-                style={{ width: 'auto', minWidth: '150px' }}
-              >
-                {boards.map(b => (
-                  <option key={b.id} value={b.id}>{b.title}</option>
-                ))}
-              </select>
-            </div>
-
-            <button
-              className="btn-secondary"
-              style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}
-              onClick={() => setShowCreateModal(true)}
-            >
-              <Plus size={13} />
-              <span>New Board</span>
-            </button>
-          </div>
-
-          {activeBoard && (
-            <span style={{ fontSize: '0.68rem', color: 'var(--text-dark)', fontFamily: 'monospace' }}>
-              {activeBoard.id}
-            </span>
-          )}
-        </div>
-
-        {/* Main board area */}
         {loading && !activeBoard ? (
           <div className="board-container">
             <SkeletonLoader />
@@ -237,6 +213,88 @@ export const BoardPage: React.FC = () => {
           <div className="board-container">
             <BoardHeader boardId={activeBoard.id} />
 
+            {/* Filter Bar */}
+            <div className="filter-bar glass-panel animate-fade-in">
+              <div className="filter-group-left">
+                <div className="search-input-wrapper">
+                  <Search size={16} className="search-icon" />
+                  <input
+                    type="text"
+                    placeholder="Search tasks..."
+                    value={filterText}
+                    onChange={e => setFilterText(e.target.value)}
+                  />
+                  {filterText && (
+                    <button className="clear-search-btn" onClick={() => setFilterText('')}>
+                      &times;
+                    </button>
+                  )}
+                </div>
+
+                <div className="filter-dropdown-wrapper">
+                  <Filter size={14} className="filter-icon" />
+                  
+                  {/* Priority Filter */}
+                  <select
+                    value={filterPriority}
+                    onChange={e => setFilterPriority(e.target.value)}
+                    className="filter-select"
+                  >
+                    <option value="">All Priorities</option>
+                    <option value="LOW">Low</option>
+                    <option value="MEDIUM">Medium</option>
+                    <option value="HIGH">High</option>
+                    <option value="URGENT">Urgent</option>
+                  </select>
+
+                  {/* Assignee Filter */}
+                  <select
+                    value={filterAssignee}
+                    onChange={e => setFilterAssignee(e.target.value)}
+                    className="filter-select"
+                  >
+                    <option value="">All Members</option>
+                    {activeBoard.members.map(m => (
+                      <option key={m.user.id} value={m.user.id}>
+                        {m.user.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Label Filter */}
+                  <select
+                    value={filterLabel}
+                    onChange={e => setFilterLabel(e.target.value)}
+                    className="filter-select"
+                  >
+                    <option value="">All Labels</option>
+                    {uniqueLabels.map(l => (
+                      <option key={l} value={l}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <label className="checkbox-filter-label">
+                  <input
+                    type="checkbox"
+                    checked={filterOverdue}
+                    onChange={e => setFilterOverdue(e.target.checked)}
+                  />
+                  <Calendar size={14} />
+                  <span>Overdue Only</span>
+                </label>
+              </div>
+
+              {hasActiveFilters && (
+                <button className="btn-clear-filters" onClick={resetFilters}>
+                  Clear Filters
+                </button>
+              )}
+            </div>
+
+            {/* Dnd Canvas */}
             <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
               <div className="board-canvas">
                 {activeBoard.columns.map((column, i) => (
@@ -248,7 +306,6 @@ export const BoardPage: React.FC = () => {
                   />
                 ))}
 
-                {/* Add column inline hint */}
                 {activeBoard.columns.length === 0 && (
                   <div className="empty-state" style={{ minWidth: '240px' }}>
                     <div className="empty-state-icon">
@@ -268,12 +325,11 @@ export const BoardPage: React.FC = () => {
               <FolderKanban size={28} color="var(--color-primary)" />
             </div>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-              No boards found. Create one to get started.
+              Board not found or you are not a member.
             </p>
-            <button className="btn-primary" onClick={() => setShowCreateModal(true)}>
-              <Plus size={16} />
-              <span>Create Board</span>
-            </button>
+            <a href="#/" className="btn-primary" style={{ marginTop: '1rem', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+              Go to Dashboard
+            </a>
           </div>
         )}
       </div>
@@ -285,52 +341,19 @@ export const BoardPage: React.FC = () => {
       {conflictMessage && (
         <div className="toast-container">
           <div className="toast error">
-            <AlertCircle size={16} />
+            <AlertTriangle size={16} />
             <span style={{ flex: 1 }}>{conflictMessage}</span>
             <button
               onClick={() => setConflictMessage(null)}
-              style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' }}
+              className="toast-close-btn"
             >
               <X size={14} />
             </button>
           </div>
         </div>
       )}
-
-      {/* Create board modal */}
-      {showCreateModal && (
-        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setShowCreateModal(false); }}>
-          <form onSubmit={handleCreateBoard} className="modal-panel glass-panel" style={{ gap: '1rem', maxWidth: '380px' }}>
-            <div className="modal-title">
-              <div style={{
-                width: '32px', height: '32px', borderRadius: '8px',
-                background: 'rgba(99,102,241,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center'
-              }}>
-                <FolderKanban size={17} color="var(--color-primary)" />
-              </div>
-              Create New Board
-            </div>
-            <input
-              type="text"
-              placeholder="e.g. Marketing Q3 Sprint"
-              className="input-field"
-              value={newBoardTitle}
-              onChange={e => setNewBoardTitle(e.target.value)}
-              required
-              autoFocus
-            />
-            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-              <button type="submit" className="btn-primary" style={{ padding: '0.6rem 1.1rem' }}>
-                <Plus size={15} />
-                Create Board
-              </button>
-              <button type="button" className="btn-secondary" style={{ padding: '0.6rem 1rem' }} onClick={() => setShowCreateModal(false)}>
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
     </div>
   );
 };
+
+export default BoardPage;

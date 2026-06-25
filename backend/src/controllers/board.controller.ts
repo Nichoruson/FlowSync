@@ -5,11 +5,11 @@ import { getIoInstance } from '../config/socket';
 import logger from '../utils/logger';
 
 export const createBoard = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
-  const { title } = req.body;
+  const { title, description, color } = req.body;
   const userId = req.user?.userId;
 
-  if (!title || !userId) {
-    res.status(400).json({ success: false, message: 'Board title is required' });
+  if (!userId) {
+    res.status(401).json({ success: false, message: 'Authentication required' });
     return;
   }
 
@@ -19,6 +19,8 @@ export const createBoard = async (req: AuthenticatedRequest, res: Response, next
       const newBoard = await tx.board.create({
         data: {
           title,
+          description: description || null,
+          color: color || '#6366f1',
           ownerId: userId,
         },
       });
@@ -71,6 +73,8 @@ export const getBoards = async (req: AuthenticatedRequest, res: Response, next: 
           select: {
             id: true,
             title: true,
+            description: true,
+            color: true,
             createdAt: true,
             ownerId: true,
           },
@@ -84,6 +88,73 @@ export const getBoards = async (req: AuthenticatedRequest, res: Response, next: 
     res.status(200).json({
       success: true,
       data: boards,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateBoard = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  const { id } = req.params;
+  const { title, description, color } = req.body;
+
+  try {
+    const updatedBoard = await prisma.board.update({
+      where: { id },
+      data: {
+        title,
+        description,
+        color,
+      },
+    });
+
+    logger.info(`Board updated: ${updatedBoard.id} - title: "${updatedBoard.title}"`);
+
+    // Broadcast to board room
+    try {
+      const io = getIoInstance();
+      io.to(`board_${id}`).emit('board_meta_changed', {
+        boardId: id,
+        type: 'renamed',
+        title: updatedBoard.title,
+      });
+    } catch (e) {
+      logger.warn('Failed to broadcast board metadata update via Socket.io', e);
+    }
+
+    res.status(200).json({
+      success: true,
+      data: updatedBoard,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteBoard = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  const { id } = req.params;
+
+  try {
+    await prisma.board.delete({
+      where: { id },
+    });
+
+    logger.info(`Board deleted: ${id}`);
+
+    // Broadcast to board room
+    try {
+      const io = getIoInstance();
+      io.to(`board_${id}`).emit('board_meta_changed', {
+        boardId: id,
+        type: 'deleted',
+      });
+    } catch (e) {
+      logger.warn('Failed to broadcast board deletion via Socket.io', e);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Board deleted successfully',
     });
   } catch (error) {
     next(error);

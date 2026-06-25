@@ -9,12 +9,7 @@ import logger from '../utils/logger';
 // ----------------------------------------------------
 
 export const createTask = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
-  const { columnId, title, description, boardId } = req.body;
-
-  if (!columnId || !title || !boardId) {
-    res.status(400).json({ success: false, message: 'columnId, title, and boardId are required' });
-    return;
-  }
+  const { columnId, title, description, boardId, priority, dueDate, labels, assignedTo } = req.body;
 
   try {
     // Determine the position (append to the end: max position + 1000)
@@ -29,8 +24,12 @@ export const createTask = async (req: AuthenticatedRequest, res: Response, next:
       data: {
         columnId,
         title,
-        description,
+        description: description || null,
         position,
+        priority: priority || 'MEDIUM',
+        dueDate: dueDate ? new Date(dueDate) : null,
+        labels: labels || [],
+        assignedTo: assignedTo || null,
       },
       include: {
         assignee: {
@@ -40,8 +39,12 @@ export const createTask = async (req: AuthenticatedRequest, res: Response, next:
     });
 
     // Real-time broadcast
-    const io = getIoInstance();
-    io.to(`board_${boardId}`).emit('task_created', { task, columnId });
+    try {
+      const io = getIoInstance();
+      io.to(`board_${boardId}`).emit('task_created', { task, columnId });
+    } catch (e) {
+      logger.warn('Failed to broadcast task_created via Socket.io', e);
+    }
 
     res.status(201).json({ success: true, data: task });
   } catch (error) {
@@ -51,12 +54,7 @@ export const createTask = async (req: AuthenticatedRequest, res: Response, next:
 
 export const updateTask = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   const { id } = req.params;
-  const { title, description, assignedTo, boardId } = req.body;
-
-  if (!boardId) {
-    res.status(400).json({ success: false, message: 'boardId is required' });
-    return;
-  }
+  const { title, description, assignedTo, boardId, priority, dueDate, labels } = req.body;
 
   try {
     const task = await prisma.task.update({
@@ -64,7 +62,10 @@ export const updateTask = async (req: AuthenticatedRequest, res: Response, next:
       data: {
         title,
         description,
-        assignedTo,
+        assignedTo: assignedTo === undefined ? undefined : assignedTo,
+        priority,
+        dueDate: dueDate === undefined ? undefined : (dueDate ? new Date(dueDate) : null),
+        labels: labels === undefined ? undefined : labels,
         // Increment version on update
         version: { increment: 1 },
       },
@@ -76,8 +77,12 @@ export const updateTask = async (req: AuthenticatedRequest, res: Response, next:
     });
 
     // Real-time broadcast
-    const io = getIoInstance();
-    io.to(`board_${boardId}`).emit('task_updated', { task });
+    try {
+      const io = getIoInstance();
+      io.to(`board_${boardId}`).emit('task_updated', { task });
+    } catch (e) {
+      logger.warn('Failed to broadcast task_updated via Socket.io', e);
+    }
 
     res.status(200).json({ success: true, data: task });
   } catch (error) {
@@ -88,11 +93,6 @@ export const updateTask = async (req: AuthenticatedRequest, res: Response, next:
 export const moveTask = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   const { id } = req.params;
   const { newColumnId, newPosition, currentVersion, boardId } = req.body;
-
-  if (!newColumnId || newPosition === undefined || currentVersion === undefined || !boardId) {
-    res.status(400).json({ success: false, message: 'newColumnId, newPosition, currentVersion, and boardId are required' });
-    return;
-  }
 
   try {
     const updatedTask = await prisma.$transaction(async (tx) => {
@@ -129,13 +129,17 @@ export const moveTask = async (req: AuthenticatedRequest, res: Response, next: N
     logger.info(`Task "${id}" moved to Column "${newColumnId}" position ${newPosition} by User ${req.user?.userId}`);
 
     // 4. Broadcast to other collaborators on the board
-    const io = getIoInstance();
-    io.to(`board_${boardId}`).emit('task_moved', {
-      taskId: id,
-      newColumnId,
-      newPosition,
-      version: updatedTask.version,
-    });
+    try {
+      const io = getIoInstance();
+      io.to(`board_${boardId}`).emit('task_moved', {
+        taskId: id,
+        newColumnId,
+        newPosition,
+        version: updatedTask.version,
+      });
+    } catch (e) {
+      logger.warn('Failed to broadcast task_moved via Socket.io', e);
+    }
 
     res.status(200).json({ success: true, data: updatedTask });
   } catch (error: any) {
@@ -159,17 +163,16 @@ export const deleteTask = async (req: AuthenticatedRequest, res: Response, next:
   const { id } = req.params;
   const { boardId } = req.query;
 
-  if (!boardId) {
-    res.status(400).json({ success: false, message: 'boardId is required as a query parameter' });
-    return;
-  }
-
   try {
     await prisma.task.delete({ where: { id } });
 
     // Real-time broadcast
-    const io = getIoInstance();
-    io.to(`board_${boardId as string}`).emit('task_deleted', { taskId: id });
+    try {
+      const io = getIoInstance();
+      io.to(`board_${boardId as string}`).emit('task_deleted', { taskId: id });
+    } catch (e) {
+      logger.warn('Failed to broadcast task_deleted via Socket.io', e);
+    }
 
     res.status(200).json({ success: true, message: 'Task deleted successfully' });
   } catch (error) {
@@ -184,22 +187,7 @@ export const deleteTask = async (req: AuthenticatedRequest, res: Response, next:
 export const createColumn = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   const { boardId, title } = req.body;
 
-  if (!boardId || !title) {
-    res.status(400).json({ success: false, message: 'boardId and title are required' });
-    return;
-  }
-
   try {
-    // Check user membership
-    const member = await prisma.boardMember.findUnique({
-      where: { boardId_userId: { boardId, userId: req.user!.userId } },
-    });
-
-    if (!member) {
-      res.status(403).json({ success: false, message: 'Access denied' });
-      return;
-    }
-
     // Determine the position (append to end: max position + 1000)
     const lastCol = await prisma.column.findFirst({
       where: { boardId },
@@ -217,10 +205,41 @@ export const createColumn = async (req: AuthenticatedRequest, res: Response, nex
     });
 
     // Broadcast
-    const io = getIoInstance();
-    io.to(`board_${boardId}`).emit('column_created', { column });
+    try {
+      const io = getIoInstance();
+      io.to(`board_${boardId}`).emit('column_created', { column });
+    } catch (e) {
+      logger.warn('Failed to broadcast column_created via Socket.io', e);
+    }
 
     res.status(201).json({ success: true, data: column });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateColumn = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  const { id } = req.params;
+  const { title, newPosition, boardId } = req.body;
+
+  try {
+    const column = await prisma.column.update({
+      where: { id },
+      data: {
+        title: title === undefined ? undefined : title,
+        position: newPosition === undefined ? undefined : newPosition,
+      },
+    });
+
+    // Broadcast
+    try {
+      const io = getIoInstance();
+      io.to(`board_${boardId}`).emit('column_updated', { column });
+    } catch (e) {
+      logger.warn('Failed to broadcast column_updated via Socket.io', e);
+    }
+
+    res.status(200).json({ success: true, data: column });
   } catch (error) {
     next(error);
   }
@@ -230,11 +249,6 @@ export const moveColumn = async (req: AuthenticatedRequest, res: Response, next:
   const { id } = req.params;
   const { newPosition, boardId } = req.body;
 
-  if (newPosition === undefined || !boardId) {
-    res.status(400).json({ success: false, message: 'newPosition and boardId are required' });
-    return;
-  }
-
   try {
     const column = await prisma.column.update({
       where: { id },
@@ -242,11 +256,15 @@ export const moveColumn = async (req: AuthenticatedRequest, res: Response, next:
     });
 
     // Broadcast
-    const io = getIoInstance();
-    io.to(`board_${boardId}`).emit('column_moved', {
-      columnId: id,
-      newPosition,
-    });
+    try {
+      const io = getIoInstance();
+      io.to(`board_${boardId}`).emit('column_moved', {
+        columnId: id,
+        newPosition,
+      });
+    } catch (e) {
+      logger.warn('Failed to broadcast column_moved via Socket.io', e);
+    }
 
     res.status(200).json({ success: true, data: column });
   } catch (error) {
@@ -258,17 +276,16 @@ export const deleteColumn = async (req: AuthenticatedRequest, res: Response, nex
   const { id } = req.params;
   const { boardId } = req.query;
 
-  if (!boardId) {
-    res.status(400).json({ success: false, message: 'boardId is required as a query parameter' });
-    return;
-  }
-
   try {
     await prisma.column.delete({ where: { id } });
 
     // Broadcast
-    const io = getIoInstance();
-    io.to(`board_${boardId as string}`).emit('column_deleted', { columnId: id });
+    try {
+      const io = getIoInstance();
+      io.to(`board_${boardId as string}`).emit('column_deleted', { columnId: id });
+    } catch (e) {
+      logger.warn('Failed to broadcast column_deleted via Socket.io', e);
+    }
 
     res.status(200).json({ success: true, message: 'Column deleted successfully' });
   } catch (error) {

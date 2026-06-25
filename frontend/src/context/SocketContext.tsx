@@ -95,11 +95,26 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     newSocket.on('column_created', ({ column }) => {
       boardStore.syncColumnCreated(column);
     });
+    newSocket.on('column_updated', ({ column }) => {
+      boardStore.syncColumnUpdated(column);
+    });
     newSocket.on('column_moved', ({ columnId, newPosition }) => {
       boardStore.syncColumnMoved(columnId, newPosition);
     });
     newSocket.on('column_deleted', ({ columnId }) => {
       boardStore.syncColumnDeleted(columnId);
+    });
+    newSocket.on('board_meta_changed', ({ boardId, type, title }) => {
+      if (type === 'renamed' && title) {
+        boardStore.syncBoardUpdated(boardId, title);
+      } else if (type === 'deleted') {
+        const activeBoard = useBoardStore.getState().activeBoard;
+        boardStore.syncBoardDeleted(boardId);
+        addToast('info', 'This board has been deleted by the owner');
+        if (activeBoard?.id === boardId) {
+          window.location.hash = '#/';
+        }
+      }
     });
 
     // Collaboration events

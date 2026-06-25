@@ -4,7 +4,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useBoardStore } from '../store/boardStore';
 import type { Column } from '../store/boardStore';
 import { TaskCard } from './TaskCard';
-import { Plus, Trash2, Check, X } from 'lucide-react';
+import { Plus, Trash2, Check, X, Edit2 } from 'lucide-react';
 
 const COLUMN_COLORS = [
   '#6366f1', '#06b6d4', '#10b981', '#f59e0b',
@@ -18,26 +18,86 @@ interface ColumnContainerProps {
 }
 
 export const ColumnContainer: React.FC<ColumnContainerProps> = ({ column, boardId, index }) => {
-  const { createTask, deleteColumn } = useBoardStore();
+  const {
+    createTask,
+    deleteColumn,
+    renameColumn,
+    filterText,
+    filterPriority,
+    filterAssignee,
+    filterLabel,
+    filterOverdue,
+  } = useBoardStore();
+
   const [isAdding, setIsAdding] = useState(false);
   const [taskTitle, setTaskTitle] = useState('');
   const [taskDesc, setTaskDesc] = useState('');
 
-  const dotColor = COLUMN_COLORS[index % COLUMN_COLORS.length];
+  // Column renaming state
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editTitle, setEditTitle] = useState(column.title);
 
+  const dotColor = COLUMN_COLORS[index % COLUMN_COLORS.length];
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
+
+  // Apply filters to tasks
+  const filteredTasks = column.tasks.filter((t) => {
+    if (filterText) {
+      const matchTitle = t.title.toLowerCase().includes(filterText.toLowerCase());
+      const matchDesc = (t.description || '').toLowerCase().includes(filterText.toLowerCase());
+      if (!matchTitle && !matchDesc) return false;
+    }
+    if (filterPriority && t.priority !== filterPriority) {
+      return false;
+    }
+    if (filterAssignee && t.assignedTo !== filterAssignee) {
+      return false;
+    }
+    if (filterLabel && !t.labels.includes(filterLabel.toLowerCase())) {
+      return false;
+    }
+    if (filterOverdue) {
+      if (!t.dueDate) return false;
+      const isOverdue = new Date(t.dueDate) < new Date();
+      if (!isOverdue) return false;
+    }
+    return true;
+  });
 
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!taskTitle.trim()) return;
-    await createTask(boardId, column.id, taskTitle.trim(), taskDesc.trim());
+    await createTask(boardId, {
+      columnId: column.id,
+      title: taskTitle.trim(),
+      description: taskDesc.trim() || undefined,
+    });
     setTaskTitle('');
     setTaskDesc('');
     setIsAdding(false);
   };
 
+  const handleRenameSubmit = async () => {
+    if (!editTitle.trim() || editTitle.trim() === column.title) {
+      setIsEditingTitle(false);
+      setEditTitle(column.title);
+      return;
+    }
+    await renameColumn(boardId, column.id, editTitle.trim());
+    setIsEditingTitle(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleRenameSubmit();
+    } else if (e.key === 'Escape') {
+      setIsEditingTitle(false);
+      setEditTitle(column.title);
+    }
+  };
+
   const handleDeleteColumn = async () => {
-    if (confirm(`Delete column "${column.title}"? All tasks inside will be permanently deleted.`)) {
+    if (window.confirm(`Delete column "${column.title}"? All tasks inside will be permanently deleted.`)) {
       await deleteColumn(boardId, column.id);
     }
   };
@@ -51,24 +111,50 @@ export const ColumnContainer: React.FC<ColumnContainerProps> = ({ column, boardI
       <div className="column-header">
         <div className="column-title">
           <div className="column-dot" style={{ background: dotColor, boxShadow: `0 0 6px ${dotColor}55` }} />
-          <span>{column.title}</span>
-          <span className="column-badge">{column.tasks.length}</span>
+          
+          {isEditingTitle ? (
+            <input
+              type="text"
+              className="column-title-edit-input"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onBlur={handleRenameSubmit}
+              onKeyDown={handleKeyDown}
+              autoFocus
+            />
+          ) : (
+            <span
+              className="column-title-text"
+              onDoubleClick={() => setIsEditingTitle(true)}
+              title="Double click to rename"
+            >
+              {column.title}
+            </span>
+          )}
+
+          <span className="column-badge">{filteredTasks.length}</span>
         </div>
-        <button className="btn-icon danger" onClick={handleDeleteColumn} title="Delete column">
-          <Trash2 size={13} />
-        </button>
+        
+        <div className="column-header-actions">
+          <button className="btn-icon" onClick={() => setIsEditingTitle(true)} title="Rename column">
+            <Edit2 size={12} />
+          </button>
+          <button className="btn-icon danger" onClick={handleDeleteColumn} title="Delete column">
+            <Trash2 size={13} />
+          </button>
+        </div>
       </div>
 
       {/* Droppable task list */}
       <div ref={setNodeRef} className="task-list">
-        <SortableContext items={column.tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-          {column.tasks.map((task, taskIndex) => (
+        <SortableContext items={filteredTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+          {filteredTasks.map((task, taskIndex) => (
             <TaskCard key={task.id} task={task} boardId={boardId} taskIndex={taskIndex} />
           ))}
         </SortableContext>
 
         {/* Empty column drop hint */}
-        {column.tasks.length === 0 && (
+        {filteredTasks.length === 0 && (
           <div style={{
             border: '1px dashed rgba(255,255,255,0.08)',
             borderRadius: '8px',
@@ -77,7 +163,7 @@ export const ColumnContainer: React.FC<ColumnContainerProps> = ({ column, boardI
             fontSize: '0.78rem',
             color: 'var(--text-dark)',
           }}>
-            Drop tasks here
+            {column.tasks.length > 0 ? 'No matching tasks' : 'Drop tasks here'}
           </div>
         )}
       </div>
