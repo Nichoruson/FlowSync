@@ -154,11 +154,11 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose 
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="task-detail-modal-card animate-scale-up" onClick={(e) => e.stopPropagation()}>
+      <div className="task-detail-modal-card" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="modal-header">
+        <div className="task-detail-header">
+          <span className={`priority-indicator-bar ${priority.toLowerCase()}`} />
           <div className="modal-title-area">
-            <span className={`priority-indicator-bar ${priority.toLowerCase()}`} />
             <input
               type="text"
               className="modal-title-input"
@@ -167,8 +167,8 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose 
               placeholder="Task Title"
             />
           </div>
-          <button className="close-btn" onClick={onClose}>
-            <X size={20} />
+          <button className="close-btn" onClick={onClose} style={{ marginLeft: 'auto' }}>
+            <X size={18} />
           </button>
         </div>
 

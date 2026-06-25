@@ -122,38 +122,52 @@ export const HomePage: React.FC = () => {
 
       {/* Create Board Modal */}
       {showModal && (
-  <div className="modal-overlay" onClick={() => setShowModal(false)}>
-    <div className="modal-card glass-panel animate-scale-up" onClick={(e) => e.stopPropagation()}>
-      <div className="modal-header">
-        <h3>Create New Board</h3>
-        <button className="close-btn" onClick={() => setShowModal(false)}>&times;</button>
-
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div className="modal-header">
+              <div className="modal-header-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+                  <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+                </svg>
+              </div>
+              <div>
+                <h3>Create New Board</h3>
+                <p className="modal-header-subtitle">Set up your workspace and start organizing tasks</p>
+              </div>
+              <button className="close-btn" onClick={() => setShowModal(false)}>&times;</button>
             </div>
+
+            {/* Form */}
             <form onSubmit={handleSubmit} className="modal-form">
               <div className="form-group">
-                <label htmlFor="board-title">Board Title *</label>
+                <label htmlFor="board-title">Board Title <span className="required-mark">*</span></label>
                 <input
                   id="board-title"
                   type="text"
                   className="input-field"
-                  placeholder="Enter board title"
+                  placeholder="e.g. Product Roadmap, Sprint Q3..."
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   required
                   autoFocus
                 />
               </div>
+
               <div className="form-group">
-                <label htmlFor="board-desc">Description</label>
+                <label htmlFor="board-desc">Description <span className="optional-mark">(optional)</span></label>
                 <textarea
                   id="board-desc"
                   className="input-field"
-                  placeholder="What is this board about?"
+                  placeholder="What is this board for? Give your team context..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   maxLength={500}
+                  rows={3}
                 />
               </div>
+
               <div className="form-group">
                 <label>Theme Color</label>
                 <div className="color-picker-grid">
@@ -167,7 +181,9 @@ export const HomePage: React.FC = () => {
                     />
                   ))}
                 </div>
+                <div className="color-preview-bar" style={{ background: selectedColor }} />
               </div>
+
               <div className="modal-actions">
                 <button type="button" className="btn-secondary" onClick={() => setShowModal(false)}>
                   Cancel

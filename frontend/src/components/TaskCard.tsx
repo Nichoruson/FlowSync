@@ -7,37 +7,6 @@ import { useSocket } from '../context/SocketContext';
 import { Edit2, Trash2, Check, X, ShieldAlert, FileText, Calendar, AlertCircle, Paperclip } from 'lucide-react';
 import TaskDetailModal from './TaskDetailModal';
 
-const renderMarkdown = (text: string | null): React.ReactNode => {
-  if (!text) {
-    return <span style={{ fontStyle: 'italic', color: 'var(--text-dark)' }}>No description provided.</span>;
-  }
-
-  const lines = text.split('\n');
-
-  return lines.map((line, lineIdx) => {
-    let html = line
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-
-    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-    html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
-    html = html.replace(
-      /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
-      '<a href="$2" target="_blank" rel="noopener noreferrer" style="color: var(--color-primary); text-decoration: underline;" onclick="event.stopPropagation()">$1</a>'
-    );
-
-    return (
-      <div
-        key={lineIdx}
-        dangerouslySetInnerHTML={{ __html: html }}
-        style={{ minHeight: lineIdx > 0 && line === '' ? '0.75rem' : 'auto' }}
-      />
-    );
-  });
-};
-
 interface TaskCardProps {
   task: Task;
   boardId: string;
@@ -198,13 +167,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, boardId, taskIndex = 0
               </div>
             </div>
 
-            {/* Details section */}
-            <div className="task-details-preview" style={{ marginTop: '0.5rem', marginBottom: '0.625rem' }}>
-              <span style={{ fontSize: '0.68rem', color: 'var(--text-dark)', fontWeight: 700, display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.15rem' }}>Details</span>
-              <div className="task-desc" style={{ margin: 0 }}>
-                {renderMarkdown(task.description)}
-              </div>
-            </div>
 
             {/* Middle Section: Priority, Due Date & Attachments */}
             <div className="task-card-meta-row">
