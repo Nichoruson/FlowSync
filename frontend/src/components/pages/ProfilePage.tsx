@@ -89,7 +89,7 @@ export const ProfilePage: React.FC = () => {
             {/* Read-only Email Field */}
             <div className="form-group readonly">
               <label>Email Address</label>
-              <input type="email" value={user?.email || ''} readOnly disabled />
+              <input type="email" className="input-field" value={user?.email || ''} readOnly disabled />
               <small className="help-text">Email address cannot be changed.</small>
             </div>
 
@@ -101,6 +101,7 @@ export const ProfilePage: React.FC = () => {
                 <input
                   id="user-name"
                   type="text"
+                  className="input-field"
                   placeholder="Enter full name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -123,6 +124,7 @@ export const ProfilePage: React.FC = () => {
               <input
                 id="curr-pwd"
                 type="password"
+                className="input-field"
                 placeholder="Enter current password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
@@ -135,6 +137,7 @@ export const ProfilePage: React.FC = () => {
                 <input
                   id="new-pwd"
                   type="password"
+                  className="input-field"
                   placeholder="Enter new password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
@@ -145,6 +148,7 @@ export const ProfilePage: React.FC = () => {
                 <input
                   id="conf-pwd"
                   type="password"
+                  className="input-field"
                   placeholder="Confirm new password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}

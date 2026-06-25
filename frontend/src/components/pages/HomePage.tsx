@@ -135,6 +135,7 @@ export const HomePage: React.FC = () => {
                 <input
                   id="board-title"
                   type="text"
+                  className="input-field"
                   placeholder="Enter board title"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
@@ -146,6 +147,7 @@ export const HomePage: React.FC = () => {
                 <label htmlFor="board-desc">Description</label>
                 <textarea
                   id="board-desc"
+                  className="input-field"
                   placeholder="What is this board about?"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -176,7 +178,6 @@ export const HomePage: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
         </div>
       )}
     </div>

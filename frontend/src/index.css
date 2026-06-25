@@ -1392,7 +1392,8 @@ select option {
 /* Task Detail Modal Styling */
 .task-detail-modal-card {
   width: 100%;
-  max-width: 680px;
+  max-width: 820px;
+  max-height: 90vh;
   background: var(--bg-surface-glass);
   border: 1px solid var(--border-glass);
   border-radius: 20px;
@@ -1442,10 +1443,12 @@ select option {
 
 .modal-body-grid {
   display: grid;
-  grid-template-columns: 3fr 1.5fr;
+  grid-template-columns: 3.2fr 1.8fr;
   padding: 1.5rem;
   gap: 1.5rem;
   border-top: 1px solid var(--border-glass);
+  max-height: calc(90vh - 75px);
+  overflow-y: auto;
 }
 
 .labels-manager {
@@ -1869,4 +1872,147 @@ select option {
 
 .color-preset-btn:hover {
   transform: scale(1.1);
+}
+
+/* =====================================================
+   GENERIC MODAL & FORM ELEMENTS (BOARD CREATION & MORE)
+   ===================================================== */
+.modal-card {
+  width: 100%;
+  max-width: 520px;
+  background: var(--bg-surface-glass);
+  border: 1px solid var(--border-glass);
+  border-radius: 18px;
+  padding: 2.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  position: relative;
+  box-shadow: var(--shadow-premium);
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 0.875rem;
+  border-bottom: 1px solid var(--border-glass);
+}
+
+.modal-header h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.modal-header .close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+
+.modal-header .close-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-main);
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.form-group.readonly input {
+  background: rgba(255, 255, 255, 0.01) !important;
+  color: var(--text-muted) !important;
+  border-color: rgba(255, 255, 255, 0.03) !important;
+  cursor: not-allowed;
+}
+
+.help-text {
+  font-size: 0.75rem;
+  color: var(--text-dark);
+  margin-top: 0.25rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+textarea.input-field {
+  resize: vertical;
+  min-height: 110px;
+}
+
+/* =====================================================
+   TASK DETAILS BUTTON & HOVER ACTIONS
+   ===================================================== */
+.task-actions-btn-group {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.task-card:hover .task-actions-btn-group {
+  opacity: 1;
+}
+
+.btn-details {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.6rem;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 6px;
+  color: #a5b4fc;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  font-family: var(--font-heading);
+}
+
+.btn-details:hover {
+  background: rgba(99, 102, 241, 0.3);
+  border-color: rgba(99, 102, 241, 0.55);
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.3);
+}
+
+.add-label-form:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-glow);
 }

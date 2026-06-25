@@ -209,10 +209,11 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose 
               <textarea
                 ref={textareaRef}
                 id="task-description"
+                className="input-field"
                 placeholder="Add a more detailed description... (Use B / I / Link buttons above to format)"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                rows={5}
+                rows={8}
               />
             </div>
 
@@ -280,17 +281,19 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose 
                 <form onSubmit={handleAddAttachment} style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                   <input
                     type="text"
+                    className="input-field"
                     placeholder="Link Title (e.g. Design Mockup)"
                     value={newAttachmentName}
                     onChange={(e) => setNewAttachmentName(e.target.value)}
-                    style={{ flex: 1, minWidth: '140px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-glass)', borderRadius: '6px', padding: '0.35rem 0.5rem', color: 'var(--text-main)', fontSize: '0.8rem', outline: 'none' }}
+                    style={{ flex: 1, minWidth: '140px', padding: '0.35rem 0.5rem', fontSize: '0.8rem' }}
                   />
                   <input
                     type="text"
+                    className="input-field"
                     placeholder="File or Page URL..."
                     value={newAttachmentUrl}
                     onChange={(e) => setNewAttachmentUrl(e.target.value)}
-                    style={{ flex: 1.5, minWidth: '180px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-glass)', borderRadius: '6px', padding: '0.35rem 0.5rem', color: 'var(--text-main)', fontSize: '0.8rem', outline: 'none' }}
+                    style={{ flex: 1.5, minWidth: '180px', padding: '0.35rem 0.5rem', fontSize: '0.8rem' }}
                     required
                   />
                   <button
