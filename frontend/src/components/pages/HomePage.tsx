@@ -122,11 +122,12 @@ export const HomePage: React.FC = () => {
 
       {/* Create Board Modal */}
       {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-card animate-scale-up" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Create New Board</h3>
-              <button className="close-btn" onClick={() => setShowModal(false)}>&times;</button>
+  <div className="modal-overlay" onClick={() => setShowModal(false)}>
+    <div className="modal-card glass-panel animate-scale-up" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-header">
+        <h3>Create New Board</h3>
+        <button className="close-btn" onClick={() => setShowModal(false)}>&times;</button>
+
             </div>
             <form onSubmit={handleSubmit} className="modal-form">
               <div className="form-group">
@@ -175,6 +176,7 @@ export const HomePage: React.FC = () => {
               </div>
             </form>
           </div>
+        </div>
         </div>
       )}
     </div>

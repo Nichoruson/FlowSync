@@ -114,7 +114,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, boardId, taskIndex = 0
         ref={setNodeRef}
         style={style}
         className={`task-card ${isDragging ? 'is-dragging' : ''} ${isLocked ? 'locked' : ''}`}
-        onDoubleClick={() => !isEditing && !isLocked && setShowDetailModal(true)}
+        
         {...attributes}
         {...listeners}
       >
@@ -187,6 +187,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, boardId, taskIndex = 0
                   title="Delete"
                 >
                   <Trash2 size={12} />
+                </button>
+                <button
+                  className="btn-details"
+                  onClick={(e) => { e.stopPropagation(); setShowDetailModal(true); }}
+                  title="View Details"
+                >
+                  Details
                 </button>
               </div>
             </div>
