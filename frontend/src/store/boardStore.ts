@@ -17,8 +17,9 @@ export interface Task {
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   dueDate: string | null;
   labels: string[];
-  assignedTo: string | null;
-  assignee?: User | null;
+  attachments: string[];
+  assignedTo: string[];
+  assignees?: User[];
   createdAt: string;
   updatedAt: string;
 }
@@ -97,15 +98,17 @@ interface BoardState {
     priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
     dueDate?: string | null;
     labels?: string[];
-    assignedTo?: string | null;
+    attachments?: string[];
+    assignedTo?: string[];
   }) => Promise<void>;
   updateTaskDetails: (boardId: string, taskId: string, data: {
     title: string;
     description: string | null;
-    assignedTo?: string | null;
+    assignedTo?: string[];
     priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
     dueDate?: string | null;
     labels?: string[];
+    attachments?: string[];
   }) => Promise<void>;
   deleteTask: (boardId: string, taskId: string) => Promise<void>;
   moveTaskLocally: (taskId: string, sourceColId: string, destColId: string, position: number) => void;

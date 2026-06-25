@@ -9,7 +9,7 @@ import logger from '../utils/logger';
 // ----------------------------------------------------
 
 export const createTask = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
-  const { columnId, title, description, boardId, priority, dueDate, labels, assignedTo } = req.body;
+  const { columnId, title, description, boardId, priority, dueDate, labels, assignedTo, attachments } = req.body;
 
   try {
     // Determine the position (append to the end: max position + 1000)
@@ -29,10 +29,13 @@ export const createTask = async (req: AuthenticatedRequest, res: Response, next:
         priority: priority || 'MEDIUM',
         dueDate: dueDate ? new Date(dueDate) : null,
         labels: labels || [],
-        assignedTo: assignedTo || null,
+        attachments: attachments || [],
+        assignees: {
+          connect: assignedTo && assignedTo.length > 0 ? assignedTo.map((userId: string) => ({ id: userId })) : [],
+        },
       },
       include: {
-        assignee: {
+        assignees: {
           select: { id: true, name: true, email: true },
         },
       },
@@ -54,7 +57,7 @@ export const createTask = async (req: AuthenticatedRequest, res: Response, next:
 
 export const updateTask = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
   const { id } = req.params;
-  const { title, description, assignedTo, boardId, priority, dueDate, labels } = req.body;
+  const { title, description, assignedTo, boardId, priority, dueDate, labels, attachments } = req.body;
 
   try {
     const task = await prisma.task.update({
@@ -62,15 +65,18 @@ export const updateTask = async (req: AuthenticatedRequest, res: Response, next:
       data: {
         title,
         description,
-        assignedTo: assignedTo === undefined ? undefined : assignedTo,
+        assignees: assignedTo === undefined ? undefined : {
+          set: assignedTo ? assignedTo.map((userId: string) => ({ id: userId })) : [],
+        },
         priority,
         dueDate: dueDate === undefined ? undefined : (dueDate ? new Date(dueDate) : null),
         labels: labels === undefined ? undefined : labels,
+        attachments: attachments === undefined ? undefined : attachments,
         // Increment version on update
         version: { increment: 1 },
       },
       include: {
-        assignee: {
+        assignees: {
           select: { id: true, name: true, email: true },
         },
       },
@@ -119,7 +125,7 @@ export const moveTask = async (req: AuthenticatedRequest, res: Response, next: N
           version: existingTask.version + 1,
         },
         include: {
-          assignee: {
+          assignees: {
             select: { id: true, name: true, email: true },
           },
         },

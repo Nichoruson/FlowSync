@@ -13,7 +13,8 @@ export const createTaskSchema = z.object({
     priority: priorityEnum.optional(),
     dueDate: z.string().datetime({ offset: true }).optional().nullable(),
     labels: z.array(z.string().max(40)).max(10).optional(),
-    assignedTo: uuidSchema.optional().nullable(),
+    attachments: z.array(z.string().max(2048)).max(20).optional(),
+    assignedTo: z.array(uuidSchema).optional(),
   }),
 });
 
@@ -26,7 +27,8 @@ export const updateTaskSchema = z.object({
     priority: priorityEnum.optional(),
     dueDate: z.string().datetime({ offset: true }).optional().nullable(),
     labels: z.array(z.string().max(40)).max(10).optional(),
-    assignedTo: uuidSchema.optional().nullable(),
+    attachments: z.array(z.string().max(2048)).max(20).optional(),
+    assignedTo: z.array(uuidSchema).optional(),
   }),
 });
 

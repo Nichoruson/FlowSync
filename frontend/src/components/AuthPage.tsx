@@ -10,6 +10,29 @@ export const AuthPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [inviteDetails, setInviteDetails] = useState<{ email: string; boardTitle: string; invitedBy: string } | null>(null);
+
+  React.useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.includes('/accept-invite')) {
+      const queryString = hash.split('?')[1] || '';
+      const params = new URLSearchParams(queryString);
+      const token = params.get('token');
+      if (token) {
+        setIsLogin(false); // Automatically switch to sign up
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+        fetch(`${API_URL}/invitations/${token}`)
+          .then(res => res.json())
+          .then(res => {
+            if (res.success && res.data) {
+              setInviteDetails(res.data);
+              setEmail(res.data.email);
+            }
+          })
+          .catch(err => console.error('Error fetching invite details', err));
+      }
+    }
+  }, []);
   
   // Field validation errors
   const [emailError, setEmailError] = useState('');
@@ -111,6 +134,22 @@ export const AuthPage: React.FC = () => {
             </div>
             <span className="auth-logo-text">FlowSync</span>
           </div>
+
+          {/* Invitation Banner */}
+          {inviteDetails && (
+            <div style={{
+              background: 'rgba(99, 102, 241, 0.12)',
+              border: '1px solid rgba(99, 102, 241, 0.25)',
+              borderRadius: '8px',
+              padding: '0.75rem',
+              marginBottom: '1.25rem',
+              textAlign: 'center',
+              fontSize: '0.82rem',
+              color: '#a5b4fc'
+            }}>
+              ✉️ <strong>{inviteDetails.invitedBy}</strong> has invited you to join the board <strong>"{inviteDetails.boardTitle}"</strong>. Please sign up or sign in below to accept.
+            </div>
+          )}
 
           <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.4rem' }}>

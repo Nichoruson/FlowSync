@@ -207,7 +207,7 @@ export const getBoardById = async (req: AuthenticatedRequest, res: Response, nex
             tasks: {
               orderBy: { position: 'asc' },
               include: {
-                assignee: {
+                assignees: {
                   select: {
                     id: true,
                     name: true,

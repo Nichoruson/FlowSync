@@ -50,7 +50,7 @@ export const ColumnContainer: React.FC<ColumnContainerProps> = ({ column, boardI
     if (filterPriority && t.priority !== filterPriority) {
       return false;
     }
-    if (filterAssignee && t.assignedTo !== filterAssignee) {
+    if (filterAssignee && !t.assignedTo.includes(filterAssignee)) {
       return false;
     }
     if (filterLabel && !t.labels.includes(filterLabel.toLowerCase())) {

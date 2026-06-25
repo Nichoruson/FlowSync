@@ -37,6 +37,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ boardId, onClose }) =>
 
   const [email, setEmail] = useState('');
   const [members, setMembers] = useState<BoardMember[]>(activeBoard?.members || []);
+  const [pendingInvites, setPendingInvites] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
@@ -47,6 +48,24 @@ export const InviteModal: React.FC<InviteModalProps> = ({ boardId, onClose }) =>
       setMembers(activeBoard.members);
     }
   }, [activeBoard?.members]);
+
+  const fetchPendingInvites = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_URL}/boards/${boardId}/invitations`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.data.success) {
+        setPendingInvites(res.data.data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch pending invitations', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchPendingInvites();
+  }, [boardId]);
 
   const myRole = members.find(m => m.userId === user?.id)?.role;
   const isOwnerOrAdmin = myRole === 'OWNER' || myRole === 'ADMIN';
@@ -63,16 +82,16 @@ export const InviteModal: React.FC<InviteModalProps> = ({ boardId, onClose }) =>
 
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.post(
-        `${API_URL}/boards/${boardId}/members`,
+      await axios.post(
+        `${API_URL}/boards/${boardId}/invitations`,
         { email: email.trim() },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setMembers(prev => [...prev, res.data.data]);
       setEmail('');
-      showFeedback('success', `Invitation sent! They can now access this board.`);
+      showFeedback('success', `Invitation sent to ${email}! They will receive an email/link to join.`);
+      fetchPendingInvites();
     } catch (err: any) {
-      showFeedback('error', err.response?.data?.message || 'Failed to invite member');
+      showFeedback('error', err.response?.data?.message || 'Failed to send invitation');
     } finally {
       setLoading(false);
     }
@@ -97,6 +116,20 @@ export const InviteModal: React.FC<InviteModalProps> = ({ boardId, onClose }) =>
       showFeedback('error', err.response?.data?.message || 'Failed to remove member');
     } finally {
       setRemovingId(null);
+    }
+  };
+
+  const handleRevoke = async (inviteId: string) => {
+    if (!confirm('Revoke this invitation?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`${API_URL}/boards/${boardId}/invitations/${inviteId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setPendingInvites(prev => prev.filter(i => i.id !== inviteId));
+      showFeedback('success', 'Invitation revoked');
+    } catch (err: any) {
+      showFeedback('error', err.response?.data?.message || 'Failed to revoke invitation');
     }
   };
 
@@ -164,8 +197,8 @@ export const InviteModal: React.FC<InviteModalProps> = ({ boardId, onClose }) =>
                 <span>{loading ? 'Inviting...' : 'Invite'}</span>
               </button>
             </form>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-dark)', marginTop: '0.4rem' }}>
-              The user must already have a FlowSync account.
+             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.4rem' }}>
+              If they do not have an account, they will receive an email/link to sign up and join.
             </p>
           </div>
         )}
@@ -187,10 +220,10 @@ export const InviteModal: React.FC<InviteModalProps> = ({ boardId, onClose }) =>
                   <div style={{ fontSize: '0.875rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                     {member.user.name}
                     {member.userId === user?.id && (
-                      <span style={{ fontSize: '0.65rem', color: 'var(--text-dark)' }}>(you)</span>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>(you)</span>
                     )}
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-dark)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {member.user.email}
                   </div>
                 </div>
@@ -217,6 +250,43 @@ export const InviteModal: React.FC<InviteModalProps> = ({ boardId, onClose }) =>
             ))}
           </div>
         </div>
+
+        {/* Pending Invites List */}
+        {isOwnerOrAdmin && pendingInvites.length > 0 && (
+          <div style={{ marginTop: '1.25rem' }}>
+            <div className="label-xs" style={{ marginBottom: '0.6rem' }}>Pending Invitations</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '180px', overflowY: 'auto' }}>
+              {pendingInvites.map(invite => (
+                <div key={invite.id} className="member-row" style={{ opacity: 0.85 }}>
+                  <div
+                    className="presence-avatar"
+                    style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--text-main)', border: '1px solid var(--border-glass)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    ✉️
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      {invite.email}
+                      <span style={{ fontSize: '0.65rem', color: 'var(--color-primary)', background: 'rgba(99,102,241,0.1)', padding: '0.1rem 0.3rem', borderRadius: '4px' }}>Pending</span>
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      Invited by {invite.invitedBy}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                    <button
+                      className="btn-icon danger"
+                      onClick={() => handleRevoke(invite.id)}
+                      title="Revoke invitation"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

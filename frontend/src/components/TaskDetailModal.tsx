@@ -15,7 +15,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose 
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description || '');
   const [priority, setPriority] = useState(task.priority || 'MEDIUM');
-  const [assignedTo, setAssignedTo] = useState(task.assignedTo || '');
+  const [assignedTo, setAssignedTo] = useState<string[]>(task.assignedTo || []);
   
   // Format due date for date input (YYYY-MM-DD)
   const initialDueDate = task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '';
@@ -23,9 +23,78 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose 
 
   const [labels, setLabels] = useState<string[]>(task.labels || []);
   const [newLabel, setNewLabel] = useState('');
+
+  const [attachments, setAttachments] = useState<string[]>(task.attachments || []);
+  const [newAttachmentName, setNewAttachmentName] = useState('');
+  const [newAttachmentUrl, setNewAttachmentUrl] = useState('');
   
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+
+  const insertFormatting = (type: 'bold' | 'italic' | 'link') => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    const selectedText = text.substring(start, end);
+
+    let replacement = '';
+    let cursorOffset = 0;
+
+    if (type === 'bold') {
+      replacement = `**${selectedText || 'bold text'}**`;
+      cursorOffset = selectedText ? replacement.length : 2;
+    } else if (type === 'italic') {
+      replacement = `*${selectedText || 'italic text'}*`;
+      cursorOffset = selectedText ? replacement.length : 1;
+    } else if (type === 'link') {
+      const url = prompt('Enter the link URL:', 'https://');
+      if (url === null) return;
+      replacement = `[${selectedText || 'link text'}](${url})`;
+      cursorOffset = replacement.length;
+    }
+
+    const newText = text.substring(0, start) + replacement + text.substring(end);
+    setDescription(newText);
+
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + cursorOffset, start + cursorOffset);
+    }, 0);
+  };
+
+  const handleAddAttachment = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanUrl = newAttachmentUrl.trim();
+    const cleanName = newAttachmentName.trim();
+    if (!cleanUrl) return;
+
+    let formattedUrl = cleanUrl;
+    if (!/^https?:\/\//i.test(cleanUrl)) {
+      formattedUrl = 'https://' + cleanUrl;
+    }
+
+    const nameToUse = cleanName || 'Link';
+    const attachmentString = `${nameToUse}|${formattedUrl}`;
+
+    if (attachments.includes(attachmentString)) {
+      setNewAttachmentUrl('');
+      setNewAttachmentName('');
+      return;
+    }
+
+    setAttachments([...attachments, attachmentString]);
+    setNewAttachmentUrl('');
+    setNewAttachmentName('');
+  };
+
+  const handleRemoveAttachment = (attToRemove: string) => {
+    setAttachments(attachments.filter((att) => att !== attToRemove));
+  };
 
   const handleAddLabel = (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,10 +127,11 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose 
       await updateTaskDetails(activeBoard!.id, task.id, {
         title,
         description: description.trim() || null,
-        assignedTo: assignedTo || null,
+        assignedTo,
         priority,
         dueDate: dueDate ? new Date(dueDate).toISOString() : null,
         labels,
+        attachments,
       });
       onClose();
     } catch (err: any) {
@@ -107,10 +177,39 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose 
           {/* Main Info */}
           <div className="modal-main-section">
             <div className="form-group">
-              <label htmlFor="task-description">Description</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                <label htmlFor="task-description" style={{ margin: 0 }}>Description</label>
+                <div className="markdown-toolbar" style={{ display: 'flex', gap: '0.35rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => insertFormatting('bold')}
+                    style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', fontWeight: 'bold', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-glass)', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-main)' }}
+                    title="Bold"
+                  >
+                    B
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertFormatting('italic')}
+                    style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', fontStyle: 'italic', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-glass)', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-main)' }}
+                    title="Italic"
+                  >
+                    I
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertFormatting('link')}
+                    style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-glass)', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-main)' }}
+                    title="Link"
+                  >
+                    🔗 Link
+                  </button>
+                </div>
+              </div>
               <textarea
+                ref={textareaRef}
                 id="task-description"
-                placeholder="Add a more detailed description..."
+                placeholder="Add a more detailed description... (Use B / I / Link buttons above to format)"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={5}
@@ -146,6 +245,63 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose 
                 </form>
               </div>
             </div>
+
+            {/* Attachments section */}
+            <div className="form-group" style={{ marginTop: '1.25rem' }}>
+              <label>Attachments</label>
+              <div className="attachments-manager" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: 'rgba(255, 255, 255, 0.01)', border: '1px solid var(--border-glass)', borderRadius: '8px', padding: '0.75rem' }}>
+                {attachments.length > 0 && (
+                  <div className="attachments-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {attachments.map((att) => {
+                      const [name, url] = att.split('|');
+                      return (
+                        <div key={att} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.025)', border: '1px solid var(--border-glass)', padding: '0.35rem 0.6rem', borderRadius: '6px' }}>
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ fontSize: '0.8rem', color: 'var(--color-primary)', textDecoration: 'underline', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '80%' }}
+                          >
+                            {name}
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveAttachment(att)}
+                            style={{ background: 'transparent', border: 'none', color: 'var(--color-danger)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                
+                <form onSubmit={handleAddAttachment} style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <input
+                    type="text"
+                    placeholder="Link Title (e.g. Design Mockup)"
+                    value={newAttachmentName}
+                    onChange={(e) => setNewAttachmentName(e.target.value)}
+                    style={{ flex: 1, minWidth: '140px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-glass)', borderRadius: '6px', padding: '0.35rem 0.5rem', color: 'var(--text-main)', fontSize: '0.8rem', outline: 'none' }}
+                  />
+                  <input
+                    type="text"
+                    placeholder="File or Page URL..."
+                    value={newAttachmentUrl}
+                    onChange={(e) => setNewAttachmentUrl(e.target.value)}
+                    style={{ flex: 1.5, minWidth: '180px', background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-glass)', borderRadius: '6px', padding: '0.35rem 0.5rem', color: 'var(--text-main)', fontSize: '0.8rem', outline: 'none' }}
+                    required
+                  />
+                  <button
+                    type="submit"
+                    style={{ background: 'var(--color-primary)', border: 'none', color: 'white', borderRadius: '6px', padding: '0.35rem 0.75rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
+                  >
+                    Attach
+                  </button>
+                </form>
+              </div>
+            </div>
           </div>
 
           {/* Sidebar controls */}
@@ -166,21 +322,58 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose 
               </select>
             </div>
 
-            {/* Assignee */}
+            {/* Assignees */}
             <div className="sidebar-group">
-              <label><User size={16} /> Assignee</label>
-              <select
-                value={assignedTo}
-                onChange={(e) => setAssignedTo(e.target.value)}
-                className="assignee-select"
+              <label><User size={16} /> Assignees</label>
+              <div
+                style={{
+                  maxHeight: '120px',
+                  overflowY: 'auto',
+                  background: 'rgba(0, 0, 0, 0.15)',
+                  border: '1px solid var(--border-glass)',
+                  borderRadius: '6px',
+                  padding: '0.4rem 0.5rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.35rem',
+                }}
               >
-                <option value="">Unassigned</option>
-                {activeBoard?.members.map((member) => (
-                  <option key={member.user.id} value={member.user.id}>
-                    {member.user.name}
-                  </option>
-                ))}
-              </select>
+                {activeBoard?.members.map((member) => {
+                  const isChecked = assignedTo.includes(member.user.id);
+                  return (
+                    <label
+                      key={member.user.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        fontSize: '0.8rem',
+                        color: isChecked ? 'var(--text-main)' : 'var(--text-main)',
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                        margin: 0,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => {
+                          if (isChecked) {
+                            setAssignedTo(assignedTo.filter((id) => id !== member.user.id));
+                          } else {
+                            setAssignedTo([...assignedTo, member.user.id]);
+                          }
+                        }}
+                        style={{ accentColor: 'var(--color-primary)', cursor: 'pointer' }}
+                      />
+                      <span>{member.user.name}</span>
+                    </label>
+                  );
+                })}
+                {(!activeBoard?.members || activeBoard.members.length === 0) && (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-dark)', fontStyle: 'italic' }}>No board members</span>
+                )}
+              </div>
             </div>
 
             {/* Due Date */}

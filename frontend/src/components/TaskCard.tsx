@@ -4,8 +4,39 @@ import { CSS } from '@dnd-kit/utilities';
 import { useBoardStore } from '../store/boardStore';
 import type { Task } from '../store/boardStore';
 import { useSocket } from '../context/SocketContext';
-import { Edit2, Trash2, Check, X, ShieldAlert, FileText, Calendar, AlertCircle } from 'lucide-react';
+import { Edit2, Trash2, Check, X, ShieldAlert, FileText, Calendar, AlertCircle, Paperclip } from 'lucide-react';
 import TaskDetailModal from './TaskDetailModal';
+
+const renderMarkdown = (text: string | null): React.ReactNode => {
+  if (!text) {
+    return <span style={{ fontStyle: 'italic', color: 'var(--text-dark)' }}>No description provided.</span>;
+  }
+
+  const lines = text.split('\n');
+
+  return lines.map((line, lineIdx) => {
+    let html = line
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
+    html = html.replace(
+      /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener noreferrer" style="color: var(--color-primary); text-decoration: underline;" onclick="event.stopPropagation()">$1</a>'
+    );
+
+    return (
+      <div
+        key={lineIdx}
+        dangerouslySetInnerHTML={{ __html: html }}
+        style={{ minHeight: lineIdx > 0 && line === '' ? '0.75rem' : 'auto' }}
+      />
+    );
+  });
+};
 
 interface TaskCardProps {
   task: Task;
@@ -70,9 +101,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, boardId, taskIndex = 0
     if (window.confirm('Delete this task?')) await deleteTask(boardId, task.id);
   };
 
-  const avatarColor = task.assignee
-    ? AVATAR_COLORS[task.assignee.name.charCodeAt(0) % AVATAR_COLORS.length]
-    : '';
+
 
   const isOverdue = task.dueDate ? new Date(task.dueDate) < new Date() : false;
   const formattedDueDate = task.dueDate
@@ -165,12 +194,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, boardId, taskIndex = 0
             {/* Details section */}
             <div className="task-details-preview" style={{ marginTop: '0.5rem', marginBottom: '0.625rem' }}>
               <span style={{ fontSize: '0.68rem', color: 'var(--text-dark)', fontWeight: 700, display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.15rem' }}>Details</span>
-              <p className="task-desc" style={{ margin: 0, fontStyle: task.description ? 'normal' : 'italic' }}>
-                {task.description || 'No description provided.'}
-              </p>
+              <div className="task-desc" style={{ margin: 0 }}>
+                {renderMarkdown(task.description)}
+              </div>
             </div>
 
-            {/* Middle Section: Priority & Due Date */}
+            {/* Middle Section: Priority, Due Date & Attachments */}
             <div className="task-card-meta-row">
               {task.priority && (
                 <span className={`priority-badge ${task.priority.toLowerCase()}`}>
@@ -185,6 +214,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, boardId, taskIndex = 0
                   {formattedDueDate}
                 </span>
               )}
+
+              {task.attachments && task.attachments.length > 0 && (
+                <span className="due-date-badge" title={`${task.attachments.length} attachment(s)`} style={{ gap: '0.2rem' }}>
+                  <Paperclip size={10} />
+                  <span>{task.attachments.length}</span>
+                </span>
+              )}
             </div>
 
             <div className="task-footer">
@@ -193,19 +229,35 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, boardId, taskIndex = 0
                 v{task.version}
               </span>
 
-              {task.assignee ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }} title={`Assigned to ${task.assignee.name}`}>
-                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{task.assignee.name}</span>
-                  <div
-                    style={{
-                      width: '20px', height: '20px', borderRadius: '50%',
-                      background: avatarColor, color: 'white',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '0.55rem', fontWeight: 700,
-                      border: '1.5px solid var(--bg-surface)',
-                    }}
-                  >
-                    {task.assignee.name.charAt(0).toUpperCase()}
+              {task.assignees && task.assignees.length > 0 ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }} title={`Assigned to: ${task.assignees.map(u => u.name).join(', ')}`}>
+                  <div style={{ display: 'flex', flexDirection: 'row-reverse' }}>
+                    {task.assignees.map((assigneeUser, idx) => {
+                      const userAvatarColor = AVATAR_COLORS[assigneeUser.name.charCodeAt(0) % AVATAR_COLORS.length];
+                      return (
+                        <div
+                          key={assigneeUser.id}
+                          style={{
+                            width: '20px',
+                            height: '20px',
+                            borderRadius: '50%',
+                            background: userAvatarColor,
+                            color: 'white',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.55rem',
+                            fontWeight: 700,
+                            border: '1.5px solid var(--bg-surface)',
+                            marginLeft: idx > 0 ? '-6px' : '0',
+                            zIndex: idx,
+                            position: 'relative',
+                          }}
+                        >
+                          {assigneeUser.name.charAt(0).toUpperCase()}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ) : (

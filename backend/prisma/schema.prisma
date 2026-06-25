@@ -25,7 +25,7 @@ model User {
   // Relations
   ownedBoards   Board[]        @relation("BoardOwner")
   memberships   BoardMember[]
-  assignedTasks Task[]         @relation("TaskAssignee")
+  assignedTasks Task[]         @relation("TaskAssignees")
   refreshTokens RefreshToken[]
 
   @@map("users")
@@ -58,6 +58,7 @@ model Board {
   owner   User          @relation("BoardOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   members BoardMember[]
   columns Column[]
+  invitations Invitation[]
 
   @@map("boards")
 }
@@ -102,16 +103,34 @@ model Task {
   priority    Priority  @default(MEDIUM)
   dueDate     DateTime? @map("due_date")
   labels      String[]  @default([])
-  assignedTo  String?   @map("assigned_to")
+  attachments String[]  @default([])
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
   // Relations
-  column   Column @relation(fields: [columnId], references: [id], onDelete: Cascade)
-  assignee User?  @relation("TaskAssignee", fields: [assignedTo], references: [id], onDelete: SetNull)
+  column    Column @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  assignees User[] @relation("TaskAssignees")
 
   @@index([columnId, position])
   @@index([priority])
   @@index([dueDate])
   @@map("tasks")
+}
+
+model Invitation {
+  id        String   @id @default(uuid())
+  boardId   String   @map("board_id")
+  email     String
+  token     String   @unique
+  role      String   @default("MEMBER")
+  invitedBy String   @map("invited_by")
+  status    String   @default("PENDING") // PENDING, ACCEPTED, DECLINED
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([token])
+  @@map("invitations")
 }

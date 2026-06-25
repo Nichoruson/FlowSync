@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { HomePage } from './pages/HomePage';
 import { BoardPage } from './BoardPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { AcceptInvitePage } from './pages/AcceptInvitePage';
 
 export const Router: React.FC = () => {
   const [route, setRoute] = useState(window.location.hash || '#/');
@@ -31,6 +32,13 @@ export const Router: React.FC = () => {
   if (path.startsWith('/board/')) {
     const boardId = path.split('/board/')[1];
     return <BoardPage boardId={boardId} />;
+  }
+
+  if (path.startsWith('/accept-invite')) {
+    const queryString = route.split('?')[1] || '';
+    const params = new URLSearchParams(queryString);
+    const token = params.get('token') || '';
+    return <AcceptInvitePage token={token} />;
   }
 
   // Fallback
