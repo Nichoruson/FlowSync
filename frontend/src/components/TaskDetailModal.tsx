@@ -183,7 +183,8 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose 
                   <button
                     type="button"
                     onClick={() => insertFormatting('bold')}
-                    style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', fontWeight: 'bold', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-glass)', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-main)' }}
+                    className="markdown-btn"
+                    style={{ fontWeight: 'bold' }}
                     title="Bold"
                   >
                     B
@@ -191,7 +192,8 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose 
                   <button
                     type="button"
                     onClick={() => insertFormatting('italic')}
-                    style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', fontStyle: 'italic', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-glass)', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-main)' }}
+                    className="markdown-btn"
+                    style={{ fontStyle: 'italic' }}
                     title="Italic"
                   >
                     I
@@ -199,7 +201,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose 
                   <button
                     type="button"
                     onClick={() => insertFormatting('link')}
-                    style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-glass)', borderRadius: '4px', cursor: 'pointer', color: 'var(--text-main)' }}
+                    className="markdown-btn"
                     title="Link"
                   >
                     🔗 Link

@@ -1389,20 +1389,24 @@ select option {
   box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
 }
 
-/* Task Detail Modal Styling */
+/* Task Detail Modal Styling - Enlarged to 70-80% viewport */
 .task-detail-modal-card {
-  width: 100%;
-  max-width: 820px;
-  max-height: 90vh;
+  width: 80vw;
+  height: 80vh;
+  max-width: 1200px;
+  max-height: 85vh;
+  min-width: 320px;
   background: var(--bg-surface-glass);
   border: 1px solid var(--border-glass);
-  border-radius: 20px;
+  border-radius: 24px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
   animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   position: relative;
+  box-shadow: var(--shadow-premium);
 }
 
 .priority-indicator-bar {
@@ -1429,7 +1433,7 @@ select option {
   color: var(--text-main);
   font-family: var(--font-heading);
   font-weight: 700;
-  font-size: 1.2rem;
+  font-size: 1.25rem;
   width: 100%;
   padding: 0.35rem 0.5rem;
   border-radius: 6px;
@@ -1443,12 +1447,36 @@ select option {
 
 .modal-body-grid {
   display: grid;
-  grid-template-columns: 3.2fr 1.8fr;
-  padding: 1.5rem;
-  gap: 1.5rem;
+  grid-template-columns: 3.3fr 1.7fr;
+  padding: 2rem;
+  gap: 2rem;
   border-top: 1px solid var(--border-glass);
-  max-height: calc(90vh - 75px);
+  flex: 1;
   overflow-y: auto;
+  min-height: 0;
+}
+
+.modal-main-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.markdown-btn {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border-glass);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: var(--transition-fast);
+}
+
+.markdown-btn:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--text-main);
+  border-color: rgba(255,255,255,0.2);
 }
 
 .labels-manager {
