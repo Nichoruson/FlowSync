@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { useBoardStore } from '../store/boardStore';
 import type { Task } from '../store/boardStore';
 import {
@@ -199,7 +200,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose 
   // ────────────────────────────────────────────────────────────────────────────
   // Render
   // ────────────────────────────────────────────────────────────────────────────
-  return (
+  return ReactDOM.createPortal(
     <div className="modal-overlay" onClick={onClose}>
       <div className="tdm-card" onClick={e => e.stopPropagation()}>
 
@@ -545,7 +546,8 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose 
           </aside>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { useBoardStore } from '../store/boardStore';
 import type { BoardMember } from '../store/boardStore';
 import { useAuth } from '../context/AuthContext';
@@ -133,7 +134,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ boardId, onClose }) =>
     }
   };
 
-  return (
+  return ReactDOM.createPortal(
     <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal-panel glass-panel">
         {/* Header */}
@@ -288,6 +289,7 @@ export const InviteModal: React.FC<InviteModalProps> = ({ boardId, onClose }) =>
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

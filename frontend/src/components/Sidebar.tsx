@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ReactDOM from 'react-dom';
 import { useBoardStore } from '../store/boardStore';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -159,8 +160,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeBoardId }) => {
         </button>
       </div>
 
-      {/* ── Create Board Modal ─────────────────────────────────────────── */}
-      {showCreateModal && (
+      {/* ── Create Board Modal ─────────────────────────────────────── */}
+      {showCreateModal && ReactDOM.createPortal(
         <div className="modal-overlay" onClick={closeModal}>
           <div className="create-board-modal" onClick={e => e.stopPropagation()}>
 
@@ -258,8 +259,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeBoardId }) => {
               </div>
             </form>
           </div>
-        </div>
-      )}
+      </div>,
+      document.body
+    )}
     </aside>
   );
 };
