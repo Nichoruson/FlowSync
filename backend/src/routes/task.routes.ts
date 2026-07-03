@@ -4,6 +4,8 @@ import {
   updateTask,
   moveTask,
   deleteTask,
+  uploadAttachment,
+  upload,
   createColumn,
   updateColumn,
   moveColumn,
@@ -31,6 +33,9 @@ router.post('/tasks', validate(createTaskSchema), requireBoardMember(), createTa
 router.put('/tasks/:id', validate(updateTaskSchema), requireBoardMember(), updateTask);
 router.put('/tasks/:id/move', validate(moveTaskSchema), requireBoardMember(), moveTask);
 router.delete('/tasks/:id', validate(deleteTaskSchema), requireBoardMember(), deleteTask);
+
+// File attachment upload (multipart/form-data — skip JSON schema validation)
+router.post('/tasks/:id/upload', requireBoardMember(), upload.single('file'), uploadAttachment);
 
 // Columns
 router.post('/columns', validate(createColumnSchema), requireBoardMember(), createColumn);

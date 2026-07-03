@@ -110,6 +110,7 @@ interface BoardState {
     labels?: string[];
     attachments?: string[];
   }) => Promise<void>;
+  uploadAttachment: (boardId: string, taskId: string, file: File, name?: string) => Promise<{ path: string; name: string } | null>;
   deleteTask: (boardId: string, taskId: string) => Promise<void>;
   moveTaskLocally: (taskId: string, sourceColId: string, destColId: string, position: number) => void;
   moveTaskOnServer: (boardId: string, taskId: string, newColumnId: string, newPosition: number, currentVersion: number) => Promise<void>;
@@ -266,9 +267,36 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   updateTaskDetails: async (boardId, taskId, data) => {
     try {
-      await apiClient.put(`/tasks/${taskId}`, { ...data, boardId });
+      const res = await apiClient.put(`/tasks/${taskId}`, { ...data, boardId });
+      // Optimistically update local state with returned task
+      const updatedTask = res.data.data;
+      const { activeBoard } = get();
+      if (activeBoard) {
+        const columns = activeBoard.columns.map(col => ({
+          ...col,
+          tasks: col.tasks.map(t => (t.id === taskId ? { ...t, ...updatedTask } : t)),
+        }));
+        set({ activeBoard: { ...activeBoard, columns } });
+      }
     } catch (err: any) {
       set({ error: err.response?.data?.message || 'Failed to update task' });
+      throw err;
+    }
+  },
+
+  uploadAttachment: async (boardId, taskId, file, name) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('boardId', boardId);
+      if (name) formData.append('name', name);
+      const res = await apiClient.post(`/tasks/${taskId}/upload`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return { path: res.data.data.path, name: res.data.data.name };
+    } catch (err: any) {
+      set({ error: err.response?.data?.message || 'Failed to upload file' });
+      return null;
     }
   },
 

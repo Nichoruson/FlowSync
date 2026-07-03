@@ -1,7 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { useBoardStore } from '../store/boardStore';
 import type { Task } from '../store/boardStore';
-import { X, Calendar, User, Tag, AlertCircle, Trash2 } from 'lucide-react';
+import {
+  X, Calendar, User, Tag, AlertCircle, Trash2, Paperclip,
+  Edit3, Save, Bold, Italic, Link2, Upload, FileText,
+  Image, ExternalLink, Plus,
+} from 'lucide-react';
 
 interface TaskDetailModalProps {
   task: Task;
@@ -10,130 +14,157 @@ interface TaskDetailModalProps {
 
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] as const;
 
+const PRIORITY_META = {
+  LOW:    { color: '#94a3b8', bg: 'rgba(148,163,184,0.1)',  label: 'Low' },
+  MEDIUM: { color: '#3b82f6', bg: 'rgba(59,130,246,0.1)',   label: 'Medium' },
+  HIGH:   { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)',   label: 'High' },
+  URGENT: { color: '#ef4444', bg: 'rgba(239,68,68,0.1)',    label: 'Urgent' },
+};
+
+const getFileIcon = (name: string) => {
+  const ext = name.split('.').pop()?.toLowerCase() || '';
+  if (['png','jpg','jpeg','gif','webp','svg'].includes(ext)) return <Image size={13} />;
+  if (['pdf','doc','docx','xls','xlsx','ppt','pptx'].includes(ext)) return <FileText size={13} />;
+  return <Paperclip size={13} />;
+};
+
+const isFilePath = (url: string) => url.startsWith('/uploads/');
+const resolveUrl = (url: string) => {
+  if (isFilePath(url)) {
+    const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+    return API.replace('/api/v1', '') + url;
+  }
+  return url;
+};
+
 export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose }) => {
-  const { activeBoard, updateTaskDetails, deleteTask } = useBoardStore();
-  const [title, setTitle] = useState(task.title);
+  const { activeBoard, updateTaskDetails, deleteTask, uploadAttachment } = useBoardStore();
+
+  // ── Edit mode toggle ──────────────────────────────────────────────────────
+  const [isEditing, setIsEditing] = useState(false);
+
+  // ── Editable fields ───────────────────────────────────────────────────────
+  const [title, setTitle]       = useState(task.title);
   const [description, setDescription] = useState(task.description || '');
-  const [priority, setPriority] = useState(task.priority || 'MEDIUM');
+  const [priority, setPriority] = useState<typeof PRIORITIES[number]>(task.priority || 'MEDIUM');
   const [assignedTo, setAssignedTo] = useState<string[]>(task.assignedTo || []);
-  
-  // Format due date for date input (YYYY-MM-DD)
-  const initialDueDate = task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '';
-  const [dueDate, setDueDate] = useState(initialDueDate);
 
-  const [labels, setLabels] = useState<string[]>(task.labels || []);
+  // Fix: parse dueDate as local date to avoid UTC off-by-one
+  const toLocalDate = (iso: string | null) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+  const [dueDate, setDueDate] = useState(toLocalDate(task.dueDate));
+  const [labels, setLabels]   = useState<string[]>(task.labels || []);
   const [newLabel, setNewLabel] = useState('');
-
   const [attachments, setAttachments] = useState<string[]>(task.attachments || []);
+
+  // ── URL attachment form ────────────────────────────────────────────────────
+  const [showUrlForm, setShowUrlForm] = useState(false);
   const [newAttachmentName, setNewAttachmentName] = useState('');
-  const [newAttachmentUrl, setNewAttachmentUrl] = useState('');
-  
-  const [loading, setLoading] = useState(false);
+  const [newAttachmentUrl, setNewAttachmentUrl]   = useState('');
+
+  // ── File upload ────────────────────────────────────────────────────────────
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+
+  // ── Status ─────────────────────────────────────────────────────────────────
+  const [loading, setLoading]   = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  // ── Textarea ref for markdown toolbar ─────────────────────────────────────
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Helpers
+  // ────────────────────────────────────────────────────────────────────────────
 
   const insertFormatting = (type: 'bold' | 'italic' | 'link') => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const text = textarea.value;
-    const selectedText = text.substring(start, end);
-
-    let replacement = '';
-    let cursorOffset = 0;
-
-    if (type === 'bold') {
-      replacement = `**${selectedText || 'bold text'}**`;
-      cursorOffset = selectedText ? replacement.length : 2;
-    } else if (type === 'italic') {
-      replacement = `*${selectedText || 'italic text'}*`;
-      cursorOffset = selectedText ? replacement.length : 1;
-    } else if (type === 'link') {
-      const url = prompt('Enter the link URL:', 'https://');
-      if (url === null) return;
-      replacement = `[${selectedText || 'link text'}](${url})`;
-      cursorOffset = replacement.length;
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const { selectionStart: s, selectionEnd: e, value } = ta;
+    const sel = value.substring(s, e);
+    let rep = '';
+    if (type === 'bold')   rep = `**${sel || 'bold text'}**`;
+    if (type === 'italic') rep = `*${sel || 'italic text'}*`;
+    if (type === 'link')   {
+      const url = prompt('Enter URL:', 'https://');
+      if (!url) return;
+      rep = `[${sel || 'link text'}](${url})`;
     }
-
-    const newText = text.substring(0, start) + replacement + text.substring(end);
-    setDescription(newText);
-
+    const next = value.substring(0, s) + rep + value.substring(e);
+    setDescription(next);
     setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + cursorOffset, start + cursorOffset);
+      ta.focus();
+      ta.setSelectionRange(s + rep.length, s + rep.length);
     }, 0);
   };
 
-  const handleAddAttachment = (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanUrl = newAttachmentUrl.trim();
-    const cleanName = newAttachmentName.trim();
-    if (!cleanUrl) return;
-
-    let formattedUrl = cleanUrl;
-    if (!/^https?:\/\//i.test(cleanUrl)) {
-      formattedUrl = 'https://' + cleanUrl;
-    }
-
-    const nameToUse = cleanName || 'Link';
-    const attachmentString = `${nameToUse}|${formattedUrl}`;
-
-    if (attachments.includes(attachmentString)) {
-      setNewAttachmentUrl('');
-      setNewAttachmentName('');
-      return;
-    }
-
-    setAttachments([...attachments, attachmentString]);
+  const handleAddUrlAttachment = (ev: React.FormEvent) => {
+    ev.preventDefault();
+    const rawUrl  = newAttachmentUrl.trim();
+    const rawName = newAttachmentName.trim();
+    if (!rawUrl) return;
+    const url = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+    const attStr = `${rawName || 'Link'}|${url}`;
+    if (!attachments.includes(attStr)) setAttachments(prev => [...prev, attStr]);
     setNewAttachmentUrl('');
     setNewAttachmentName('');
+    setShowUrlForm(false);
   };
 
-  const handleRemoveAttachment = (attToRemove: string) => {
-    setAttachments(attachments.filter((att) => att !== attToRemove));
-  };
+  const handleFileUpload = useCallback(async (files: FileList | null) => {
+    if (!files || files.length === 0 || !activeBoard) return;
+    setUploading(true);
+    for (const file of Array.from(files)) {
+      const result = await uploadAttachment(activeBoard.id, task.id, file, file.name);
+      if (result) {
+        const attStr = `${result.name}|${result.path}`;
+        setAttachments(prev => [...prev, attStr]);
+      }
+    }
+    setUploading(false);
+  }, [activeBoard, task.id, uploadAttachment]);
 
-  const handleAddLabel = (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanLabel = newLabel.trim().toLowerCase();
-    if (!cleanLabel) return;
-    if (labels.includes(cleanLabel)) {
-      setNewLabel('');
-      return;
-    }
-    if (labels.length >= 10) {
-      setErrorMsg('Maximum 10 labels allowed');
-      return;
-    }
-    setLabels([...labels, cleanLabel]);
+  const handleDrop = useCallback((ev: React.DragEvent) => {
+    ev.preventDefault();
+    setDragOver(false);
+    handleFileUpload(ev.dataTransfer.files);
+  }, [handleFileUpload]);
+
+  const handleRemoveAttachment = (att: string) =>
+    setAttachments(prev => prev.filter(a => a !== att));
+
+  const handleAddLabel = (ev: React.FormEvent) => {
+    ev.preventDefault();
+    const clean = newLabel.trim().toLowerCase();
+    if (!clean) return;
+    if (labels.includes(clean)) { setNewLabel(''); return; }
+    if (labels.length >= 10) { setErrorMsg('Maximum 10 labels'); return; }
+    setLabels(prev => [...prev, clean]);
     setNewLabel('');
   };
 
-  const handleRemoveLabel = (labelToRemove: string) => {
-    setLabels(labels.filter((l) => l !== labelToRemove));
-  };
-
   const handleSave = async () => {
-    if (!title.trim()) {
-      setErrorMsg('Task title cannot be empty');
-      return;
-    }
+    if (!title.trim()) { setErrorMsg('Title cannot be empty'); return; }
     setLoading(true);
     setErrorMsg('');
     try {
       await updateTaskDetails(activeBoard!.id, task.id, {
-        title,
+        title:       title.trim(),
         description: description.trim() || null,
         assignedTo,
         priority,
-        dueDate: dueDate ? new Date(dueDate).toISOString() : null,
+        dueDate: dueDate ? new Date(dueDate + 'T00:00:00').toISOString() : null,
         labels,
         attachments,
       });
-      onClose();
+      setIsEditing(false);
     } catch (err: any) {
       setErrorMsg(err.response?.data?.message || 'Failed to save changes');
     } finally {
@@ -142,278 +173,376 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose 
   };
 
   const handleDelete = async () => {
-    if (window.confirm('Are you sure you want to delete this task?')) {
-      try {
-        await deleteTask(activeBoard!.id, task.id);
-        onClose();
-      } catch (err: any) {
-        setErrorMsg('Failed to delete task');
-      }
+    if (!window.confirm('Delete this task permanently?')) return;
+    try {
+      await deleteTask(activeBoard!.id, task.id);
+      onClose();
+    } catch {
+      setErrorMsg('Failed to delete task');
     }
   };
 
+  const cancelEdit = () => {
+    setTitle(task.title);
+    setDescription(task.description || '');
+    setPriority(task.priority || 'MEDIUM');
+    setAssignedTo(task.assignedTo || []);
+    setDueDate(toLocalDate(task.dueDate));
+    setLabels(task.labels || []);
+    setAttachments(task.attachments || []);
+    setErrorMsg('');
+    setIsEditing(false);
+  };
+
+  const pMeta = PRIORITY_META[priority];
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Render
+  // ────────────────────────────────────────────────────────────────────────────
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="task-detail-modal-card" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
-        <div className="task-detail-header">
-          <span className={`priority-indicator-bar ${priority.toLowerCase()}`} />
-          <div className="modal-title-area">
+      <div className="tdm-card" onClick={e => e.stopPropagation()}>
+
+        {/* ── Header ─────────────────────────────────────────────────────── */}
+        <div className="tdm-header">
+          <span
+            className="tdm-priority-bar"
+            style={{ background: pMeta.color }}
+          />
+
+          {isEditing ? (
             <input
-              type="text"
-              className="modal-title-input"
+              className="tdm-title-input"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Task Title"
+              onChange={e => setTitle(e.target.value)}
+              placeholder="Task title…"
+              autoFocus
             />
+          ) : (
+            <h2 className="tdm-title-view">{title}</h2>
+          )}
+
+          <div className="tdm-header-actions">
+            {isEditing ? (
+              <>
+                <button className="tdm-btn-save" onClick={handleSave} disabled={loading}>
+                  <Save size={14} />
+                  <span>{loading ? 'Saving…' : 'Save'}</span>
+                </button>
+                <button className="tdm-btn-cancel" onClick={cancelEdit}>
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button className="tdm-btn-edit" onClick={() => setIsEditing(true)}>
+                <Edit3 size={14} />
+                <span>Edit</span>
+              </button>
+            )}
+            <button className="close-btn" onClick={onClose}>
+              <X size={17} />
+            </button>
           </div>
-          <button className="close-btn" onClick={onClose} style={{ marginLeft: 'auto' }}>
-            <X size={18} />
-          </button>
         </div>
 
-        {/* Body Grid */}
-        <div className="modal-body-grid">
-          {/* Main Info */}
-          <div className="modal-main-section">
-            <div className="form-group">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                <label htmlFor="task-description" style={{ margin: 0 }}>Description</label>
-                <div className="markdown-toolbar" style={{ display: 'flex', gap: '0.35rem' }}>
-                  <button
-                    type="button"
-                    onClick={() => insertFormatting('bold')}
-                    className="markdown-btn"
-                    style={{ fontWeight: 'bold' }}
-                    title="Bold"
-                  >
-                    B
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => insertFormatting('italic')}
-                    className="markdown-btn"
-                    style={{ fontStyle: 'italic' }}
-                    title="Italic"
-                  >
-                    I
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => insertFormatting('link')}
-                    className="markdown-btn"
-                    title="Link"
-                  >
-                    🔗 Link
-                  </button>
-                </div>
-              </div>
-              <textarea
-                ref={textareaRef}
-                id="task-description"
-                className="input-field"
-                placeholder="Add a more detailed description... (Use B / I / Link buttons above to format)"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={8}
-              />
-            </div>
+        {/* ── Body Grid ──────────────────────────────────────────────────── */}
+        <div className="tdm-body">
 
-            {/* Labels section */}
-            <div className="form-group">
-              <label>Labels</label>
-              <div className="labels-manager">
-                <div className="labels-list">
-                  {labels.map((label) => (
-                    <span key={label} className="label-tag">
-                      {label}
-                      <button type="button" className="remove-label-btn" onClick={() => handleRemoveLabel(label)}>
-                        &times;
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <form onSubmit={handleAddLabel} className="add-label-form">
-                  <Tag size={16} className="tag-input-icon" />
-                  <input
-                    type="text"
-                    placeholder="Add label..."
-                    value={newLabel}
-                    onChange={(e) => setNewLabel(e.target.value)}
-                    maxLength={40}
-                  />
-                  <button type="submit" className="btn-add-label">
-                    Add
-                  </button>
-                </form>
-              </div>
-            </div>
+          {/* Main column */}
+          <div className="tdm-main">
 
-            {/* Attachments section */}
-            <div className="form-group" style={{ marginTop: '1.25rem' }}>
-              <label>Attachments</label>
-              <div className="attachments-manager" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', background: 'rgba(255, 255, 255, 0.01)', border: '1px solid var(--border-glass)', borderRadius: '8px', padding: '0.75rem' }}>
-                {attachments.length > 0 && (
-                  <div className="attachments-list" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {attachments.map((att) => {
-                      const [name, url] = att.split('|');
-                      return (
-                        <div key={att} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(255,255,255,0.025)', border: '1px solid var(--border-glass)', padding: '0.35rem 0.6rem', borderRadius: '6px' }}>
-                          <a
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ fontSize: '0.8rem', color: 'var(--color-primary)', textDecoration: 'underline', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '80%' }}
-                          >
-                            {name}
-                          </a>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveAttachment(att)}
-                            style={{ background: 'transparent', border: 'none', color: 'var(--color-danger)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold' }}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      );
-                    })}
+            {/* ── Description ───────────────────────────────────────── */}
+            <section className="tdm-section">
+              <div className="tdm-section-header">
+                <span className="tdm-section-label">Description</span>
+                {isEditing && (
+                  <div className="tdm-md-toolbar">
+                    <button type="button" className="markdown-btn" title="Bold"   onClick={() => insertFormatting('bold')}><Bold size={11}/></button>
+                    <button type="button" className="markdown-btn" title="Italic" onClick={() => insertFormatting('italic')}><Italic size={11}/></button>
+                    <button type="button" className="markdown-btn" title="Link"   onClick={() => insertFormatting('link')}><Link2 size={11}/></button>
                   </div>
                 )}
-                
-                <form onSubmit={handleAddAttachment} style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              </div>
+
+              {isEditing ? (
+                <textarea
+                  ref={textareaRef}
+                  className="tdm-description-input"
+                  placeholder="Add a detailed description…&#10;&#10;Supports multiple lines. Use the toolbar above for Bold, Italic, and Links."
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  rows={10}
+                />
+              ) : (
+                <div className="tdm-description-view">
+                  {description ? (
+                    description.split('\n').map((line, i) => (
+                      <p key={i} style={{ margin: line === '' ? '0.4rem 0' : '0', minHeight: line === '' ? '0.4rem' : undefined }}>
+                        {line}
+                      </p>
+                    ))
+                  ) : (
+                    <span className="tdm-empty-hint">No description yet. Click Edit to add one.</span>
+                  )}
+                </div>
+              )}
+            </section>
+
+            {/* ── Labels ────────────────────────────────────────────── */}
+            <section className="tdm-section">
+              <div className="tdm-section-header">
+                <span className="tdm-section-label"><Tag size={13}/> Labels</span>
+              </div>
+              <div className="tdm-labels-area">
+                {labels.map(lbl => (
+                  <span key={lbl} className="tdm-label-chip">
+                    {lbl}
+                    {isEditing && (
+                      <button
+                        type="button"
+                        className="tdm-chip-remove"
+                        onClick={() => setLabels(prev => prev.filter(l => l !== lbl))}
+                      >×</button>
+                    )}
+                  </span>
+                ))}
+                {isEditing && (
+                  <form onSubmit={handleAddLabel} className="tdm-label-form">
+                    <input
+                      type="text"
+                      className="tdm-label-input"
+                      placeholder="Add label…"
+                      value={newLabel}
+                      onChange={e => setNewLabel(e.target.value)}
+                      maxLength={40}
+                    />
+                    <button type="submit" className="tdm-chip-add-btn">
+                      <Plus size={12}/>
+                    </button>
+                  </form>
+                )}
+                {labels.length === 0 && !isEditing && (
+                  <span className="tdm-empty-hint">No labels.</span>
+                )}
+              </div>
+            </section>
+
+            {/* ── Attachments ───────────────────────────────────────── */}
+            <section className="tdm-section">
+              <div className="tdm-section-header">
+                <span className="tdm-section-label"><Paperclip size={13}/> Attachments</span>
+                {isEditing && (
+                  <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    <button
+                      type="button"
+                      className="tdm-att-action-btn"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                      title="Upload file"
+                    >
+                      <Upload size={12}/> <span>{uploading ? 'Uploading…' : 'Upload File'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="tdm-att-action-btn"
+                      onClick={() => setShowUrlForm(v => !v)}
+                      title="Add URL link"
+                    >
+                      <Link2 size={12}/> <span>Add URL</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Hidden file input */}
+              {isEditing && (
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={e => handleFileUpload(e.target.files)}
+                />
+              )}
+
+              {/* Drop zone */}
+              {isEditing && (
+                <div
+                  className={`tdm-dropzone ${dragOver ? 'drag-over' : ''}`}
+                  onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload size={16} style={{ color: 'var(--text-dark)' }}/>
+                  <span>{uploading ? 'Uploading…' : 'Drop files here or click to browse'}</span>
+                </div>
+              )}
+
+              {/* URL form */}
+              {isEditing && showUrlForm && (
+                <form onSubmit={handleAddUrlAttachment} className="tdm-url-form">
                   <input
                     type="text"
-                    className="input-field"
-                    placeholder="Link Title (e.g. Design Mockup)"
+                    className="tdm-url-input"
+                    placeholder="Link title (optional)"
                     value={newAttachmentName}
-                    onChange={(e) => setNewAttachmentName(e.target.value)}
-                    style={{ flex: 1, minWidth: '140px', padding: '0.35rem 0.5rem', fontSize: '0.8rem' }}
+                    onChange={e => setNewAttachmentName(e.target.value)}
                   />
                   <input
                     type="text"
-                    className="input-field"
-                    placeholder="File or Page URL..."
+                    className="tdm-url-input"
+                    placeholder="https://…"
                     value={newAttachmentUrl}
-                    onChange={(e) => setNewAttachmentUrl(e.target.value)}
-                    style={{ flex: 1.5, minWidth: '180px', padding: '0.35rem 0.5rem', fontSize: '0.8rem' }}
+                    onChange={e => setNewAttachmentUrl(e.target.value)}
                     required
                   />
-                  <button
-                    type="submit"
-                    style={{ background: 'var(--color-primary)', border: 'none', color: 'white', borderRadius: '6px', padding: '0.35rem 0.75rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
-                  >
-                    Attach
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    <button type="submit" className="tdm-btn-save" style={{ flex: 1 }}>Attach</button>
+                    <button type="button" className="tdm-btn-cancel" onClick={() => setShowUrlForm(false)}>Cancel</button>
+                  </div>
                 </form>
-              </div>
-            </div>
-          </div>
+              )}
 
-          {/* Sidebar controls */}
-          <div className="modal-sidebar-section">
-            {/* Priority */}
-            <div className="sidebar-group">
-              <label><AlertCircle size={16} /> Priority</label>
-              <select
-                value={priority}
-                onChange={(e) => setPriority(e.target.value as any)}
-                className={`priority-select ${priority.toLowerCase()}`}
-              >
-                {PRIORITIES.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Assignees */}
-            <div className="sidebar-group">
-              <label><User size={16} /> Assignees</label>
-              <div
-                style={{
-                  maxHeight: '120px',
-                  overflowY: 'auto',
-                  background: 'rgba(0, 0, 0, 0.15)',
-                  border: '1px solid var(--border-glass)',
-                  borderRadius: '6px',
-                  padding: '0.4rem 0.5rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '0.35rem',
-                }}
-              >
-                {activeBoard?.members.map((member) => {
-                  const isChecked = assignedTo.includes(member.user.id);
+              {/* Attachments list */}
+              <div className="tdm-att-list">
+                {attachments.map(att => {
+                  const [attName, attUrl] = att.split('|');
+                  const resolved = resolveUrl(attUrl);
+                  const isFile = isFilePath(attUrl);
                   return (
-                    <label
-                      key={member.user.id}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.4rem',
-                        fontSize: '0.8rem',
-                        color: isChecked ? 'var(--text-main)' : 'var(--text-main)',
-                        cursor: 'pointer',
-                        userSelect: 'none',
-                        margin: 0,
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => {
-                          if (isChecked) {
-                            setAssignedTo(assignedTo.filter((id) => id !== member.user.id));
-                          } else {
-                            setAssignedTo([...assignedTo, member.user.id]);
-                          }
-                        }}
-                        style={{ accentColor: 'var(--color-primary)', cursor: 'pointer' }}
-                      />
-                      <span>{member.user.name}</span>
-                    </label>
+                    <div key={att} className="tdm-att-item">
+                      <span className="tdm-att-icon">
+                        {isFile ? getFileIcon(attName) : <ExternalLink size={13}/>}
+                      </span>
+                      <a
+                        href={resolved}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="tdm-att-link"
+                        title={attName}
+                      >
+                        {attName}
+                      </a>
+                      <span className="tdm-att-type">{isFile ? 'file' : 'url'}</span>
+                      {isEditing && (
+                        <button
+                          type="button"
+                          className="tdm-att-remove"
+                          onClick={() => handleRemoveAttachment(att)}
+                        >
+                          <X size={11}/>
+                        </button>
+                      )}
+                    </div>
                   );
                 })}
+                {attachments.length === 0 && (
+                  <span className="tdm-empty-hint">No attachments yet.</span>
+                )}
+              </div>
+            </section>
+          </div>
+
+          {/* Sidebar column */}
+          <aside className="tdm-sidebar">
+
+            {/* ── Priority ────────────────────────────────────────────── */}
+            <div className="tdm-sb-group">
+              <div className="tdm-sb-label"><AlertCircle size={13}/> Priority</div>
+              {isEditing ? (
+                <select
+                  value={priority}
+                  onChange={e => setPriority(e.target.value as typeof PRIORITIES[number])}
+                  className="tdm-select"
+                  style={{ color: pMeta.color }}
+                >
+                  {PRIORITIES.map(p => (
+                    <option key={p} value={p}>{PRIORITY_META[p].label}</option>
+                  ))}
+                </select>
+              ) : (
+                <span
+                  className="tdm-priority-chip"
+                  style={{ color: pMeta.color, background: pMeta.bg, borderColor: pMeta.color + '33' }}
+                >
+                  {pMeta.label}
+                </span>
+              )}
+            </div>
+
+            {/* ── Due Date ─────────────────────────────────────────────── */}
+            <div className="tdm-sb-group">
+              <div className="tdm-sb-label"><Calendar size={13}/> Due Date</div>
+              {isEditing ? (
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={e => setDueDate(e.target.value)}
+                  className="tdm-date-input"
+                />
+              ) : (
+                <span className={`tdm-date-chip ${task.dueDate && new Date(task.dueDate) < new Date() ? 'overdue' : ''}`}>
+                  {dueDate
+                    ? new Date(dueDate + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+                    : <span className="tdm-empty-hint">Not set</span>
+                  }
+                </span>
+              )}
+            </div>
+
+            {/* ── Assignees ────────────────────────────────────────────── */}
+            <div className="tdm-sb-group">
+              <div className="tdm-sb-label"><User size={13}/> Assignees</div>
+              <div className="tdm-assignees">
+                {activeBoard?.members.map(member => {
+                  const checked = assignedTo.includes(member.user.id);
+                  return isEditing ? (
+                    <label key={member.user.id} className="tdm-assignee-row">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          setAssignedTo(prev =>
+                            checked
+                              ? prev.filter(id => id !== member.user.id)
+                              : [...prev, member.user.id]
+                          );
+                        }}
+                        className="tdm-checkbox"
+                      />
+                      <span className="tdm-assignee-avatar">
+                        {member.user.name.charAt(0).toUpperCase()}
+                      </span>
+                      <span className="tdm-assignee-name">{member.user.name}</span>
+                    </label>
+                  ) : checked ? (
+                    <div key={member.user.id} className="tdm-assignee-row-view" title={member.user.name}>
+                      <span className="tdm-assignee-avatar">{member.user.name.charAt(0).toUpperCase()}</span>
+                      <span className="tdm-assignee-name">{member.user.name}</span>
+                    </div>
+                  ) : null;
+                })}
+                {!isEditing && assignedTo.length === 0 && (
+                  <span className="tdm-empty-hint">Unassigned</span>
+                )}
                 {(!activeBoard?.members || activeBoard.members.length === 0) && (
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-dark)', fontStyle: 'italic' }}>No board members</span>
+                  <span className="tdm-empty-hint">No board members</span>
                 )}
               </div>
             </div>
 
-            {/* Due Date */}
-            <div className="sidebar-group">
-              <label><Calendar size={16} /> Due Date</label>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="date-input"
-              />
-            </div>
+            {/* ── Error ────────────────────────────────────────────────── */}
+            {errorMsg && <div className="tdm-error">{errorMsg}</div>}
 
-            {errorMsg && <div className="sidebar-error-msg">{errorMsg}</div>}
-
-            <div className="sidebar-actions">
-              <button
-                type="button"
-                className="btn-save-task"
-                disabled={loading}
-                onClick={handleSave}
-              >
-                {loading ? 'Saving...' : 'Save Changes'}
-              </button>
-              
-              <button
-                type="button"
-                className="btn-delete-task"
-                onClick={handleDelete}
-              >
-                <Trash2 size={16} />
+            {/* ── Delete ───────────────────────────────────────────────── */}
+            <div style={{ marginTop: 'auto' }}>
+              <button type="button" className="btn-delete-task" onClick={handleDelete}>
+                <Trash2 size={14}/>
                 <span>Delete Task</span>
               </button>
             </div>
-          </div>
+          </aside>
         </div>
       </div>
     </div>

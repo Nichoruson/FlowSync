@@ -3,6 +3,26 @@ import { AuthenticatedRequest } from '../middlewares/auth.middleware';
 import prisma from '../config/database';
 import { getIoInstance } from '../config/socket';
 import logger from '../utils/logger';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+
+// ─── Multer file upload config ───────────────────────────────────────────────
+const uploadDir = path.join(__dirname, '..', '..', 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, uploadDir),
+  filename: (_req, file, cb) => {
+    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    cb(null, `${unique}${path.extname(file.originalname)}`);
+  },
+});
+
+export const upload = multer({
+  storage,
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB max
+});
 
 // ----------------------------------------------------
 // TASK CONTROLLERS
@@ -181,6 +201,48 @@ export const deleteTask = async (req: AuthenticatedRequest, res: Response, next:
     }
 
     res.status(200).json({ success: true, message: 'Task deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const uploadAttachment = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  const { id } = req.params;
+  const { boardId, name } = req.body;
+
+  if (!req.file) {
+    res.status(400).json({ success: false, message: 'No file provided' });
+    return;
+  }
+
+  try {
+    const task = await prisma.task.findUnique({ where: { id } });
+    if (!task) {
+      res.status(404).json({ success: false, message: 'Task not found' });
+      return;
+    }
+
+    const displayName = (name as string)?.trim() || req.file.originalname;
+    const filePath = `/uploads/${req.file.filename}`;
+    const attachmentString = `${displayName}|${filePath}`;
+
+    const updated = await prisma.task.update({
+      where: { id },
+      data: {
+        attachments: [...(task.attachments || []), attachmentString],
+        version: { increment: 1 },
+      },
+      include: { assignees: { select: { id: true, name: true, email: true } } },
+    });
+
+    try {
+      const io = getIoInstance();
+      io.to(`board_${boardId}`).emit('task_updated', { task: updated });
+    } catch (e) {
+      logger.warn('Failed to broadcast task_updated (upload) via Socket.io', e);
+    }
+
+    res.status(200).json({ success: true, data: { path: filePath, name: displayName, task: updated } });
   } catch (error) {
     next(error);
   }

@@ -7,6 +7,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
+import path from 'path';
 
 import apiRouter from './routes';
 import { errorHandler } from './middlewares/error.middleware';
@@ -17,7 +18,11 @@ import logger from './utils/logger';
 const app = express();
 
 // ─── Security Headers ────────────────────────────────────────────────────────
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  })
+);
 
 // ─── CORS ────────────────────────────────────────────────────────────────────
 const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
@@ -40,9 +45,12 @@ app.use(
   })
 );
 
+// ─── Static Files (Uploaded attachments) ────────────────────────────────────
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+
 // ─── Request parsing ─────────────────────────────────────────────────────────
-app.use(express.json({ limit: '2mb' }));
-app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 app.use(compression());
 
