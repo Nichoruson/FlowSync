@@ -274,3 +274,61 @@ export const updateProfile = async (req: any, res: Response, next: NextFunction)
     next(error);
   }
 };
+
+export const googleLogin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const { credential } = req.body;
+
+  if (!credential) {
+    res.status(400).json({ success: false, message: 'Google credential is required' });
+    return;
+  }
+
+  try {
+    // Verify Google ID token via Google OAuth2 tokeninfo API
+    const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
+
+    if (!response.ok) {
+      res.status(401).json({ success: false, message: 'Invalid or expired Google token' });
+      return;
+    }
+
+    const payload: any = await response.json();
+    const { email, name, sub } = payload;
+
+    if (!email) {
+      res.status(400).json({ success: false, message: 'Email not provided by Google account' });
+      return;
+    }
+
+    let user = await prisma.user.findUnique({ where: { email } });
+
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          email,
+          name: name || email.split('@')[0],
+          passwordHash: `OAUTH_GOOGLE_${sub}`,
+        },
+      });
+      logger.info(`New user registered via Google Auth: ${user.email} (${user.id})`);
+    } else {
+      logger.info(`User logged in via Google Auth: ${user.email} (${user.id})`);
+    }
+
+    const { accessToken } = await generateTokens(user, res);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        token: accessToken,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};

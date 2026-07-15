@@ -122,14 +122,22 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose 
   const handleFileUpload = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0 || !activeBoard) return;
     setUploading(true);
-    for (const file of Array.from(files)) {
-      const result = await uploadAttachment(activeBoard.id, task.id, file, file.name);
-      if (result) {
-        const attStr = `${result.name}|${result.path}`;
-        setAttachments(prev => [...prev, attStr]);
+    setErrorMsg('');
+    try {
+      for (const file of Array.from(files)) {
+        const result = await uploadAttachment(activeBoard.id, task.id, file, file.name);
+        if (result) {
+          const attStr = `${result.name}|${result.path}`;
+          setAttachments(prev => [...prev, attStr]);
+        } else {
+          setErrorMsg('Failed to upload file. Please try again.');
+        }
       }
+    } catch {
+      setErrorMsg('Failed to upload file.');
+    } finally {
+      setUploading(false);
     }
-    setUploading(false);
   }, [activeBoard, task.id, uploadAttachment]);
 
   const handleDrop = useCallback((ev: React.DragEvent) => {

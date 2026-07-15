@@ -4,7 +4,7 @@ import { ParticleBackground } from './ParticleBackground';
 import { Mail, Lock, User, Zap, Loader2, ArrowRight, ShieldAlert } from 'lucide-react';
 
 export const AuthPage: React.FC = () => {
-  const { login, register } = useAuth();
+  const { login, register, googleLogin } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -33,6 +33,57 @@ export const AuthPage: React.FC = () => {
       }
     }
   }, []);
+
+  // Initialize Google Identity Services SDK
+  React.useEffect(() => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId) return;
+
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      if ((window as any).google?.accounts?.id) {
+        (window as any).google.accounts.id.initialize({
+          client_id: clientId,
+          callback: handleGoogleCallback,
+        });
+
+        const btnEl = document.getElementById('google-signin-btn-container');
+        if (btnEl) {
+          (window as any).google.accounts.id.renderButton(btnEl, {
+            theme: 'filled_black',
+            size: 'large',
+            width: '100%',
+            text: 'continue_with',
+            shape: 'pill',
+          });
+        }
+      }
+    };
+    document.body.appendChild(script);
+
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
+
+  const handleGoogleCallback = async (response: any) => {
+    if (response?.credential) {
+      setSubmitting(true);
+      setError(null);
+      try {
+        await googleLogin(response.credential);
+      } catch (err: any) {
+        setError(err.response?.data?.message || 'Google authentication failed.');
+      } finally {
+        setSubmitting(false);
+      }
+    }
+  };
   
   // Field validation errors
   const [emailError, setEmailError] = useState('');
@@ -160,6 +211,54 @@ export const AuthPage: React.FC = () => {
                 ? 'Sign in to access your collaborative boards.'
                 : 'Join FlowSync and start collaborating in real-time.'}
             </p>
+          </div>
+
+          {/* Google Sign In Option */}
+          <div style={{ marginBottom: '1.25rem' }}>
+            <div
+              id="google-signin-btn-container"
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                width: '100%',
+                minHeight: '40px',
+              }}
+            />
+            {/* Fallback visual button if GIS SDK client id is pending configuration */}
+            {!import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+              <button
+                type="button"
+                className="btn-secondary"
+                style={{
+                  width: '100%',
+                  justifyContent: 'center',
+                  padding: '0.6rem 1rem',
+                  fontSize: '0.85rem',
+                  borderRadius: '24px',
+                  gap: '0.6rem',
+                  backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                }}
+                onClick={() => {
+                  const demoCred = prompt('To test Google Login without client registration, enter a mock Google ID Token or user token:');
+                  if (demoCred) handleGoogleCallback({ credential: demoCred });
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24">
+                  <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.7 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.7 2.9C6.5 7.2 9 5 12 5z" />
+                  <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z" />
+                  <path fill="#FBBC05" d="M5.6 14.8c-.2-.7-.4-1.5-.4-2.3s.2-1.6.4-2.3L1.9 7.3C.7 9.7 0 12.3 0 15s.7 5.3 1.9 7.7l3.7-2.9z" />
+                  <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2.2-6.4-5.2L1.9 16c1.8 3.7 5.6 7 10.1 7z" />
+                </svg>
+                <span>Continue with Google</span>
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', margin: '1.25rem 0', gap: '0.75rem' }}>
+            <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.08)' }} />
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-dark)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>OR</span>
+            <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.08)' }} />
           </div>
 
           {/* Mode toggle tabs */}

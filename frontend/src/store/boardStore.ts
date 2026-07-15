@@ -292,7 +292,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       formData.append('file', file);
       formData.append('boardId', boardId);
       if (name) formData.append('name', name);
-      const res = await apiClient.post(`/tasks/${taskId}/upload`, formData, {
+      const res = await apiClient.post(`/tasks/${taskId}/upload?boardId=${boardId}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       return { path: res.data.data.path, name: res.data.data.name };

@@ -34,8 +34,8 @@ router.put('/tasks/:id', validate(updateTaskSchema), requireBoardMember(), updat
 router.put('/tasks/:id/move', validate(moveTaskSchema), requireBoardMember(), moveTask);
 router.delete('/tasks/:id', validate(deleteTaskSchema), requireBoardMember(), deleteTask);
 
-// File attachment upload (multipart/form-data — skip JSON schema validation)
-router.post('/tasks/:id/upload', requireBoardMember(), upload.single('file'), uploadAttachment);
+// File attachment upload (multipart/form-data — parse file first before board membership check)
+router.post('/tasks/:id/upload', upload.single('file'), requireBoardMember(), uploadAttachment);
 
 // Columns
 router.post('/columns', validate(createColumnSchema), requireBoardMember(), createColumn);
