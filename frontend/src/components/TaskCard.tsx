@@ -6,6 +6,7 @@ import type { Task } from '../store/boardStore';
 import { useSocket } from '../context/SocketContext';
 import { Edit2, Trash2, Check, X, ShieldAlert, FileText, Calendar, AlertCircle, Paperclip } from 'lucide-react';
 import TaskDetailModal from './TaskDetailModal';
+import ConfirmDialog from './ConfirmDialog';
 
 interface TaskCardProps {
   task: Task;
@@ -22,12 +23,14 @@ const AVATAR_COLORS = [
 
 export const TaskCard: React.FC<TaskCardProps> = ({ task, boardId, taskIndex = 0 }) => {
   const { lockedTasks, emitDraggingState } = useSocket();
-  const { deleteTask, updateTaskDetails } = useBoardStore();
+  const deleteTask = useBoardStore((s) => s.deleteTask);
+  const updateTaskDetails = useBoardStore((s) => s.updateTaskDetails);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(task.title);
   const [editDesc, setEditDesc] = useState(task.description || '');
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const lockInfo = lockedTasks[task.id];
   const isLocked = !!lockInfo;
@@ -65,9 +68,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, boardId, taskIndex = 0
     setIsEditing(false);
   };
 
-  const handleDelete = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (window.confirm('Delete this task?')) await deleteTask(boardId, task.id);
+  const handleConfirmDelete = async () => {
+    setShowDeleteConfirm(false);
+    await deleteTask(boardId, task.id);
   };
 
 
@@ -152,7 +155,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, boardId, taskIndex = 0
                 </button>
                 <button
                   className="btn-icon danger"
-                  onClick={handleDelete}
+                  onClick={e => { e.stopPropagation(); setShowDeleteConfirm(true); }}
                   title="Delete"
                 >
                   <Trash2 size={12} />
@@ -241,6 +244,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, boardId, taskIndex = 0
         <TaskDetailModal
           task={task}
           onClose={() => setShowDetailModal(false)}
+        />
+      )}
+
+      {showDeleteConfirm && (
+        <ConfirmDialog
+          title="Delete Task"
+          message={`Are you sure you want to delete "${task.title}"?`}
+          confirmLabel="Delete"
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setShowDeleteConfirm(false)}
         />
       )}
     </>

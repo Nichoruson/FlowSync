@@ -242,10 +242,12 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   },
 
   moveColumnOnServer: async (boardId, columnId, newPosition) => {
+    const snapshot = get().activeBoard;
     try {
       await apiClient.put(`/columns/${columnId}/move`, { newPosition, boardId });
     } catch (err: any) {
-      get().fetchBoardDetails(boardId);
+      if (snapshot) set({ activeBoard: snapshot, error: err.response?.data?.message || 'Reverted column move' });
+      else get().fetchBoardDetails(boardId);
     }
   },
 
@@ -352,6 +354,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   },
 
   moveTaskOnServer: async (boardId, taskId, newColumnId, newPosition, currentVersion) => {
+    const snapshot = get().activeBoard;
     try {
       await apiClient.put(
         `/tasks/${taskId}/move`,
@@ -362,8 +365,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         set({ conflictMessage: 'Collision! This task was moved by someone else. Synchronizing board...' });
         get().fetchBoardDetails(boardId);
       } else {
-        set({ error: err.response?.data?.message || 'Network error: Position update reverted.' });
-        get().fetchBoardDetails(boardId);
+        if (snapshot) set({ activeBoard: snapshot, error: err.response?.data?.message || 'Network error: Position update reverted.' });
+        else get().fetchBoardDetails(boardId);
       }
     }
   },

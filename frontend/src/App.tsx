@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import { AuthPage } from './components/AuthPage';
 import { Router } from './components/Router';
+import ErrorBoundary from './components/ErrorBoundary';
 
 const AppContent: React.FC = () => {
   const { token, loading } = useAuth();
@@ -26,7 +27,9 @@ const AppContent: React.FC = () => {
 
   return (
     <SocketProvider>
-      <Router />
+      <ErrorBoundary>
+        <Router />
+      </ErrorBoundary>
     </SocketProvider>
   );
 };

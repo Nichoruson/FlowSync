@@ -44,10 +44,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const boardStore = useBoardStore();
-
   const addToast = useCallback((type: Toast['type'], message: string) => {
-    const id = Math.random().toString(36).slice(2);
+    const id = crypto.randomUUID();
     setToasts(prev => [...prev, { id, type, message }]);
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4500);
   }, []);
@@ -81,35 +79,35 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // Board data events
     newSocket.on('task_created', ({ task, columnId }) => {
-      boardStore.syncTaskCreated(task, columnId);
+      useBoardStore.getState().syncTaskCreated(task, columnId);
     });
     newSocket.on('task_updated', ({ task }) => {
-      boardStore.syncTaskUpdated(task);
+      useBoardStore.getState().syncTaskUpdated(task);
     });
     newSocket.on('task_moved', ({ taskId, newColumnId, newPosition, version }) => {
-      boardStore.syncTaskMoved(taskId, newColumnId, newPosition, version);
+      useBoardStore.getState().syncTaskMoved(taskId, newColumnId, newPosition, version);
     });
     newSocket.on('task_deleted', ({ taskId }) => {
-      boardStore.syncTaskDeleted(taskId);
+      useBoardStore.getState().syncTaskDeleted(taskId);
     });
     newSocket.on('column_created', ({ column }) => {
-      boardStore.syncColumnCreated(column);
+      useBoardStore.getState().syncColumnCreated(column);
     });
     newSocket.on('column_updated', ({ column }) => {
-      boardStore.syncColumnUpdated(column);
+      useBoardStore.getState().syncColumnUpdated(column);
     });
     newSocket.on('column_moved', ({ columnId, newPosition }) => {
-      boardStore.syncColumnMoved(columnId, newPosition);
+      useBoardStore.getState().syncColumnMoved(columnId, newPosition);
     });
     newSocket.on('column_deleted', ({ columnId }) => {
-      boardStore.syncColumnDeleted(columnId);
+      useBoardStore.getState().syncColumnDeleted(columnId);
     });
     newSocket.on('board_meta_changed', ({ boardId, type, title }) => {
       if (type === 'renamed' && title) {
-        boardStore.syncBoardUpdated(boardId, title);
+        useBoardStore.getState().syncBoardUpdated(boardId, title);
       } else if (type === 'deleted') {
         const activeBoard = useBoardStore.getState().activeBoard;
-        boardStore.syncBoardDeleted(boardId);
+        useBoardStore.getState().syncBoardDeleted(boardId);
         addToast('info', 'This board has been deleted by the owner');
         if (activeBoard?.id === boardId) {
           window.location.hash = '#/';
@@ -119,13 +117,13 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // Collaboration events
     newSocket.on('member_added', ({ member }) => {
-      boardStore.syncMemberAdded(member);
+      useBoardStore.getState().syncMemberAdded(member);
       addToast('info', `${member.user.name} joined the board`);
     });
     newSocket.on('member_removed', ({ userId }) => {
-      const activeBoard = boardStore.activeBoard;
+      const activeBoard = useBoardStore.getState().activeBoard;
       const removedUser = activeBoard?.members.find(m => m.userId === userId);
-      boardStore.syncMemberRemoved(userId);
+      useBoardStore.getState().syncMemberRemoved(userId);
       if (removedUser && removedUser.userId !== user.id) {
         addToast('info', `${removedUser.user.name} left the board`);
       }

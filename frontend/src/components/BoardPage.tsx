@@ -53,29 +53,29 @@ interface BoardPageProps {
 }
 
 export const BoardPage: React.FC<BoardPageProps> = ({ boardId }) => {
-  const {
-    activeBoard,
-    loading,
-    fetchBoards,
-    fetchBoardDetails,
-    moveTaskLocally,
-    moveTaskOnServer,
-    conflictMessage,
-    setConflictMessage,
-    // Filters state
-    filterText,
-    filterPriority,
-    filterAssignee,
-    filterLabel,
-    filterOverdue,
-    // Filters actions
-    setFilterText,
-    setFilterPriority,
-    setFilterAssignee,
-    setFilterLabel,
-    setFilterOverdue,
-    resetFilters,
-  } = useBoardStore();
+  const activeBoard = useBoardStore((s) => s.activeBoard);
+  const loading = useBoardStore((s) => s.loading);
+  const fetchBoards = useBoardStore((s) => s.fetchBoards);
+  const fetchBoardDetails = useBoardStore((s) => s.fetchBoardDetails);
+  const moveTaskLocally = useBoardStore((s) => s.moveTaskLocally);
+  const moveTaskOnServer = useBoardStore((s) => s.moveTaskOnServer);
+  const conflictMessage = useBoardStore((s) => s.conflictMessage);
+  const setConflictMessage = useBoardStore((s) => s.setConflictMessage);
+
+  // Filters state
+  const filterText = useBoardStore((s) => s.filterText);
+  const filterPriority = useBoardStore((s) => s.filterPriority);
+  const filterAssignee = useBoardStore((s) => s.filterAssignee);
+  const filterLabel = useBoardStore((s) => s.filterLabel);
+  const filterOverdue = useBoardStore((s) => s.filterOverdue);
+
+  // Filters actions
+  const setFilterText = useBoardStore((s) => s.setFilterText);
+  const setFilterPriority = useBoardStore((s) => s.setFilterPriority);
+  const setFilterAssignee = useBoardStore((s) => s.setFilterAssignee);
+  const setFilterLabel = useBoardStore((s) => s.setFilterLabel);
+  const setFilterOverdue = useBoardStore((s) => s.setFilterOverdue);
+  const resetFilters = useBoardStore((s) => s.resetFilters);
 
   const { joinBoard, leaveBoard } = useSocket();
   const prevBoardId = useRef<string>('');

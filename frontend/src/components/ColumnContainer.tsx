@@ -5,6 +5,7 @@ import { useBoardStore } from '../store/boardStore';
 import type { Column } from '../store/boardStore';
 import { TaskCard } from './TaskCard';
 import { Plus, Trash2, Check, X, Edit2 } from 'lucide-react';
+import ConfirmDialog from './ConfirmDialog';
 
 const COLUMN_COLORS = [
   '#6366f1', '#06b6d4', '#10b981', '#f59e0b',
@@ -18,16 +19,15 @@ interface ColumnContainerProps {
 }
 
 export const ColumnContainer: React.FC<ColumnContainerProps> = ({ column, boardId, index }) => {
-  const {
-    createTask,
-    deleteColumn,
-    renameColumn,
-    filterText,
-    filterPriority,
-    filterAssignee,
-    filterLabel,
-    filterOverdue,
-  } = useBoardStore();
+  const createTask = useBoardStore((s) => s.createTask);
+  const deleteColumn = useBoardStore((s) => s.deleteColumn);
+  const renameColumn = useBoardStore((s) => s.renameColumn);
+
+  const filterText = useBoardStore((s) => s.filterText);
+  const filterPriority = useBoardStore((s) => s.filterPriority);
+  const filterAssignee = useBoardStore((s) => s.filterAssignee);
+  const filterLabel = useBoardStore((s) => s.filterLabel);
+  const filterOverdue = useBoardStore((s) => s.filterOverdue);
 
   const [isAdding, setIsAdding] = useState(false);
   const [taskTitle, setTaskTitle] = useState('');
@@ -36,6 +36,7 @@ export const ColumnContainer: React.FC<ColumnContainerProps> = ({ column, boardI
   // Column renaming state
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState(column.title);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const dotColor = COLUMN_COLORS[index % COLUMN_COLORS.length];
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
@@ -96,10 +97,9 @@ export const ColumnContainer: React.FC<ColumnContainerProps> = ({ column, boardI
     }
   };
 
-  const handleDeleteColumn = async () => {
-    if (window.confirm(`Delete column "${column.title}"? All tasks inside will be permanently deleted.`)) {
-      await deleteColumn(boardId, column.id);
-    }
+  const handleConfirmDelete = async () => {
+    setShowDeleteConfirm(false);
+    await deleteColumn(boardId, column.id);
   };
 
   return (
@@ -139,7 +139,7 @@ export const ColumnContainer: React.FC<ColumnContainerProps> = ({ column, boardI
           <button className="btn-icon" onClick={() => setIsEditingTitle(true)} title="Rename column">
             <Edit2 size={12} />
           </button>
-          <button className="btn-icon danger" onClick={handleDeleteColumn} title="Delete column">
+          <button className="btn-icon danger" onClick={() => setShowDeleteConfirm(true)} title="Delete column">
             <Trash2 size={13} />
           </button>
         </div>
@@ -215,6 +215,16 @@ export const ColumnContainer: React.FC<ColumnContainerProps> = ({ column, boardI
           </button>
         )}
       </div>
+
+      {showDeleteConfirm && (
+        <ConfirmDialog
+          title="Delete Column"
+          message={`Delete column "${column.title}"? All tasks inside will be permanently deleted.`}
+          confirmLabel="Delete Column"
+          onConfirm={handleConfirmDelete}
+          onCancel={() => setShowDeleteConfirm(false)}
+        />
+      )}
     </div>
   );
 };
